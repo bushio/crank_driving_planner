@@ -22,6 +22,8 @@ class CrankDrigingPlanner(Node):
     def onTrigger(self, msg: Trajectory):
         self.get_logger().info("Get trajectory. Processing crank driving planner...")
         self.reference_trj = msg
+
+        self.pub_trajectory_.publish(self.reference_trj)
         #print(dir(self.reference_trj))
 
 def main(args=None):
