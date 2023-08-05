@@ -1,0 +1,7 @@
+<launch>
+  <arg name="output_crank_driving_trajectory" default="/planning/scenario_planning/lane_driving/trajectory"/>
+
+  <node pkg="crank_driving_planner" exec="crank_driving_planner_node" name="crank_driving_planner" output="screen">
+    <remap from="~/input/trajectory" to="$(var output_crank_driving_trajectory)"/>
+  </node>
+</launch>
