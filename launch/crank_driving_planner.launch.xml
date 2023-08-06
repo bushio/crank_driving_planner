@@ -5,6 +5,7 @@
   <arg name="input_acceleration" default="/localization/acceleration"/>
   <arg name="input_odometry" default="/localization/kinematic_state"/>
   <arg name="input_velocity_report" default="/vehicle/status/velocity_status"/>
+  <arg name="input_motion_state" default="/api/motion/state"/>
 
   <node pkg="crank_driving_planner" exec="crank_driving_planner_node" name="crank_driving_planner" output="screen">
     <remap from="~/input/trajectory" to="$(var input_crank_driving_trajectory)"/>
@@ -12,5 +13,6 @@
     <remap from="~/input/acceleration" to="$(var input_acceleration)"/>
     <remap from="~/input/odometry" to="$(var input_odometry)"/>
     <remap from="~/input/velocity_report" to="$(var input_velocity_report)"/>
+    <remap from="~/input/motion_state" to="(var input_motion_state)"/>
   </node>
 </launch>
