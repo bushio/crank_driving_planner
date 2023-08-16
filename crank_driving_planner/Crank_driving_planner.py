@@ -16,29 +16,29 @@ class CrankDrigingPlanner(Node):
         super().__init__('CrankDrigingPlanner')
         self.get_logger().info("Start CrankDrigingPlanner")
         
-        # Reference trajectory subscriber. Remap "obstacle_stop_planner/trajectory"
+        ## Reference trajectory subscriber. Remap "obstacle_stop_planner/trajectory" ##
         self.create_subscription(Trajectory ,"~/input/trajectory", self.onTrigger, 1)
 
-        # Accrel subscriber
+        ## Accrel subscriber ##
         self.create_subscription(AccelWithCovarianceStamped, "~/input/acceleration", self.onAcceleration, 1)
 
-        # Vehicle odometry subscriber
+        ## Vehicle odometry subscriber ##
         self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 1)
 
-        # velocity report subscriber
-        self.create_subscription(VelocityReport, "~/input/velocity_report", self.onVelocityReport, 1)
+        ## Velocity report subscriber ##
+        #self.create_subscription(VelocityReport, "~/input/velocity_report", self.onVelocityReport, 1)
 
-        # motion state subscriber
+        # Motion state subscriber ##
         self.create_subscription(MotionState, "~/input/motion_state", self.onMotion, 1)
 
 
-        # Trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory"
+        # Trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
         self.pub_trajectory_ = self.create_publisher(Trajectory, 
                                                      "~/output/trajectory", 
                                                      1 )
         
         
-        # Initialize input
+        # Initialize input ##
         self.reference_trj = None
         self.current_accel = None
         self.current_odometry = None
@@ -47,65 +47,91 @@ class CrankDrigingPlanner(Node):
         self.ego_pose = None
         self.motion_state = None
 
-    # Check if input data is initialized.
+        self.vehicle_state = "stop"
+        
+        current_time = self.get_clock().now().nanoseconds
+        self.nano_seconds = 1000**3
+        self.before_exec_time = -9999 * self.nano_seconds
+        self.duration = 1.0
+        print(current_time/self.nano_seconds)
+        if (current_time - self.before_exec_time)/(self.nano_seconds) > self.duration:
+            print((current_time - self.before_exec_time)/(self.nano_seconds))
+        
+    ## Check if input data is initialized. ##
     def isReady(self):
         if self.reference_trj is None:
+            self.get_logger().warning("The reference trajectory data has not ready yet.")
             return False
         if self.current_accel is None:
+            self.get_logger().warning("The accel data has not ready yet.")
             return False
         if self.current_odometry is None:
+            self.get_logger().warning("The odometry data has not ready yet.")
             return False
-        if self.crrent_velocity_report is None:
-            return False
+        #if self.crrent_velocity_report is None:
+        #    self.get_logger().warning("The velocity report data has not ready yet.")
+        #    return False
         if self.ego_pose is None:
+                self.get_logger().warning("The ego pose data has not ready yet.")
                 return False
         return True
 
-    # Callback function for motion state subscriber
+    ## Callback function for motion state subscriber ##
     def onMotion(self, msg: MotionState):
         self.motion_state = msg
 
 
-    # Callback function for odometry subscriber
+    ## Callback function for odometry subscriber ##
     def onOdometry(self, msg: Odometry):
         self.current_odometry = msg
         self.ego_pose = self.current_odometry.pose.pose
         self.crrent_vel = self.current_odometry.twist.twist.linear.x
         #self.get_logger().info("odometry {}".format(self.current_odometry.pose.pose))
 
+        if self.crrent_vel > 0:
+            self.vehicle_state = "drive"
+        else:
+            self.vehicle_state = "stop"
 
-    # Callback function for accrel subscriber
+
+    ## Callback function for accrel subscriber ##
     def onAcceleration(self, msg: AccelWithCovarianceStamped):
         # return geometry_msgs/Accel 
         self.current_accel = accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
 
 
-    # Callback function for velocity report subscriber
-    def onVelocityReport(self, msg: VelocityReport):
-        self.crrent_velocity_report = msg
-        self.crrent_longitudinal_velocity = msg.longitudinal_velocity
+    ## Callback function for velocity report subscriber ##
+    #def onVelocityReport(self, msg: VelocityReport):
+    #    self.crrent_velocity_report = msg
+    #    self.crrent_longitudinal_velocity = msg.longitudinal_velocity
 
 
-    # Callback function for trajectory subscriber
+    ## Callback function for trajectory subscriber ##
     def onTrigger(self, msg: Trajectory):
         self.get_logger().info("Get trajectory. Processing crank driving planner...")
         self.reference_trj = msg
         
+
         if not self.isReady():
-            print("Input data has not ready yet.")
             self.pub_trajectory_.publish(self.reference_trj)
             return
-        
-        
-        self.get_logger().info("CurrentVel {}".format(self.crrent_vel))
 
-        # If vehicle is not stopped, publish reference trajectory
-        if self.crrent_longitudinal_velocity > 0 or self.crrent_vel > 0:
-            points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
-            points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
-            self.pub_trajectory_.publish(self.reference_trj)
-        else:
-            self.get_logger().info("Vehicle is stopped")
+        #self.get_logger().info("CurrentVel {}".format(self.crrent_vel))
+
+        exec_optim = True
+        ## If the vehicke is driving, not execute optimize. ##
+        if self.vehicle_state == "drive":
+            exec_optim = False
+
+        current_time = self.get_clock().now().nanoseconds
+        if (current_time - self.before_exec_time)/(self.nano_seconds) < self.duration:
+            return
+
+        #self.get_logger().info("Time diff{}".format((current_time - self.before_exec_time)/()))
+
+        self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
+        ## If vehicle is not stopped, publish reference trajectory ##
+        if exec_optim:
             
             points = self.reference_trj.points
             self.get_logger().info("Points num {}".format(len(points)))
@@ -122,11 +148,24 @@ class CrankDrigingPlanner(Node):
                 n_p_idx, points_pose_list[n_p_idx], points_vel_list[n_p_idx]))
             
             
+            ## Path Optimize ##
+            
             for k in range(15):
-                self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.0
+                #print(self.reference_trj.points[n_p_idx + k].pose.position)
+                self.reference_trj.points[n_p_idx + k].pose.position.y -= 0.5
+                #self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.0
                 self.reference_trj.points[n_p_idx + k].longitudinal_velocity_mps = 5.0
+            
+            
+            self.pub_trajectory_.publish(self.reference_trj)
+            self.before_exec_time = self.get_clock().now().nanoseconds
+            self.vehicle_state = "drive"
 
             
+
+        else:
+            points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
+            points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
             self.pub_trajectory_.publish(self.reference_trj)
 
 

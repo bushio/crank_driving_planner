@@ -12,7 +12,6 @@
     <remap from="~/output/trajectory" to="$(var output_crank_driving_trajectory)"/>
     <remap from="~/input/acceleration" to="$(var input_acceleration)"/>
     <remap from="~/input/odometry" to="$(var input_odometry)"/>
-    <remap from="~/input/velocity_report" to="$(var input_velocity_report)"/>
-    <remap from="~/input/motion_state" to="(var input_motion_state)"/>
+    
   </node>
 </launch>
