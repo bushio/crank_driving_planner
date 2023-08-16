@@ -53,6 +53,10 @@ class CrankDrigingPlanner(Node):
         self.nano_seconds = 1000**3
         self.before_exec_time = -9999 * self.nano_seconds
         self.duration = 1.0
+
+        self.stop_time = 0.0
+        self.stop_duration = 30
+
         print(current_time/self.nano_seconds)
         if (current_time - self.before_exec_time)/(self.nano_seconds) > self.duration:
             print((current_time - self.before_exec_time)/(self.nano_seconds))
@@ -90,9 +94,13 @@ class CrankDrigingPlanner(Node):
 
         if self.crrent_vel > 0:
             self.vehicle_state = "drive"
+            self.stop_time = 0.0
         else:
-            self.vehicle_state = "stop"
+            self.vehicle_state = "drive"
+            self.stop_time += 0.1
 
+        if self.stop_time > self.stop_duration:
+            self.vehicle_state = "stop"
 
     ## Callback function for accrel subscriber ##
     def onAcceleration(self, msg: AccelWithCovarianceStamped):
@@ -120,12 +128,13 @@ class CrankDrigingPlanner(Node):
 
         exec_optim = True
         ## If the vehicke is driving, not execute optimize. ##
-        if self.vehicle_state == "drive":
+        if self.vehicle_state == "drive" or self.vehicle_state == "planning":
             exec_optim = False
+            self.pub_trajectory_.publish(self.reference_trj)
 
         current_time = self.get_clock().now().nanoseconds
         if (current_time - self.before_exec_time)/(self.nano_seconds) < self.duration:
-            return
+            self.pub_trajectory_.publish(self.reference_trj)
 
         #self.get_logger().info("Time diff{}".format((current_time - self.before_exec_time)/()))
 
@@ -135,7 +144,7 @@ class CrankDrigingPlanner(Node):
             
             points = self.reference_trj.points
             self.get_logger().info("Points num {}".format(len(points)))
-            self.get_logger().info("Vehicle is stopp")
+            self.get_logger().info("Vehicle is stopped")
             points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
             points_pose_list = getPosesFromTrajectory(self.reference_trj)
             points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
@@ -149,6 +158,7 @@ class CrankDrigingPlanner(Node):
             
             
             ## Path Optimize ##
+            #
             
             for k in range(15):
                 #print(self.reference_trj.points[n_p_idx + k].pose.position)
@@ -159,13 +169,8 @@ class CrankDrigingPlanner(Node):
             
             self.pub_trajectory_.publish(self.reference_trj)
             self.before_exec_time = self.get_clock().now().nanoseconds
-            self.vehicle_state = "drive"
-
-            
-
+            self.vehicle_state = "planning"
         else:
-            points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
-            points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
             self.pub_trajectory_.publish(self.reference_trj)
 
 
