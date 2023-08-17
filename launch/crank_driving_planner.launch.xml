@@ -1,7 +1,7 @@
 <launch>
   
-  <arg name="input_crank_driving_trajectory" default="/planning/obstacle_stop_planner/trajectory"/>
-  <arg name="output_crank_driving_trajectory" default="/planning/scenario_planning/lane_driving/trajectory"/>
+  <arg name="input_crank_driving_trajectory" default="/planning/scenario_planning/lane_driving/motion_planning/obstacle_avoidance_planner/trajectory"/>
+  <arg name="output_crank_driving_trajectory" default="/crank_driving_planner/trajectory"/>
   <arg name="input_acceleration" default="/localization/acceleration"/>
   <arg name="input_odometry" default="/localization/kinematic_state"/>
   <arg name="input_velocity_report" default="/vehicle/status/velocity_status"/>
