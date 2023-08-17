@@ -21,6 +21,10 @@ class PredictedObjectsInfo:
 
             ## Get object shape
             shape_array = self._getShapeArrayfromPredictedObjectKinematics(ob.shape)
+            
+            if len(shape_array) == 0:
+                continue
+
             object_points = shape_array  + pose
             
             xmin = np.min(object_points[:, 0])

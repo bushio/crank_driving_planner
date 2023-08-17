@@ -10,6 +10,9 @@ from nav_msgs.msg import Odometry
 from .trajectory_uitl import *
 from .predicted_objects_info import PredictedObjectsInfo
 
+from .config import Config
+from .dynamic_window_approach import DynamicWindowApproach
+
 #from motion_utils import calcLongitudinalOffsetPose
 
 class CrankDrigingPlanner(Node):
@@ -38,7 +41,7 @@ class CrankDrigingPlanner(Node):
         self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
         
         # Initialize input ##
-        self.reference_trj = None
+        self.reference_path = None
         self.current_accel = None
         self.current_odometry = None
         self.crrent_longitudinal_velocity = 0.0
@@ -57,7 +60,7 @@ class CrankDrigingPlanner(Node):
 
     ## Check if input data is initialized. ##
     def isReady(self):
-        if self.reference_trj is None:
+        if self.reference_path is None:
             self.get_logger().warning("The reference path data has not ready yet.")
             return False
         if self.current_accel is None:
@@ -111,19 +114,17 @@ class CrankDrigingPlanner(Node):
             obj_info = PredictedObjectsInfo (self.dynamic_objects.objects)
 
 
-        self.pub_path_.publish(self.reference_path)
-
-        return
         if not self.isReady():
             self.pub_path_.publish(self.reference_path)
-            return
-
+            return 
+            
         exec_optim = True
 
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
             exec_optim = False
             self.pub_path_.publish(self.reference_trj)
+            return
 
         elif self.vehicle_state == "planning":
             self.get_logger().info("Planning now")
@@ -135,36 +136,18 @@ class CrankDrigingPlanner(Node):
         ## If vehicle is not stopped, publish reference path ##
         if exec_optim:
             
-            points = self.reference_trj.points
+            points = self.reference_path.points
             self.get_logger().info("Points num {}".format(len(points)))
-            self.get_logger().info("Vehicle is stopped")
-            #points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
-            #points_pose_list = getPosesFromTrajectory(self.reference_trj)
-            #points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
-            
             ego_pose_ = ConvertPoint2List(self.ego_pose.position)
-
-            #n_p_idx = getNearestPointIndex(ego_pose_, points_pose_list)
-
-            #self.get_logger().info("Nearest point: {} {} {}".format(
-            #    n_p_idx, points_pose_list[n_p_idx], points_vel_list[n_p_idx]))
             
-            
+            self.get_logger().info("Left bound{}".format(self.reference_path.left_bound))
             ## Path Optimize ##
-            #
-            n_p_idx += 5
-            #for k in range(50):
-            #    #print(self.reference_trj.points[n_p_idx + k].pose.position)
-            #    self.reference_trj.points[n_p_idx + k].pose.position.y -= 3.0
-            #    self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.5
-            #    self.reference_trj.points[n_p_idx + k].longitudinal_velocity_mps = 5.0
-            
-            
-            #self.pub_trajectory_.publish(self.reference_trj)
+
             self.before_exec_time = self.get_clock().now().nanoseconds
             self.vehicle_state = "planning"
+            self.pub_path_.publish(self.reference_path)
         else:
-            self.pub_path_.publish(self.reference_trj)
+            self.pub_path_.publish(self.reference_path)
 
 
 def main(args=None):
