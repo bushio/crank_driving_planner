@@ -2,7 +2,7 @@ import time
 import rclpy
 import numpy as np
 from rclpy.node import Node
-from autoware_auto_planning_msgs.msg import Trajectory
+from autoware_auto_planning_msgs.msg import Trajectory, Path
 from geometry_msgs.msg import AccelWithCovarianceStamped, Point
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
@@ -16,20 +16,22 @@ class CrankDrigingPlanner(Node):
         self.get_logger().info("Start CrankDrigingPlanner")
         
         ## Reference trajectory subscriber. Remap "obstacle_stop_planner/trajectory" ##
-        self.create_subscription(Trajectory ,"~/input/trajectory", self.onTrigger, 1)
+        self.create_subscription(Path ,"~/input/path", self.onTrigger, 10)
 
         ## Accrel subscriber ##
-        self.create_subscription(AccelWithCovarianceStamped, "~/input/acceleration", self.onAcceleration, 1)
+        self.create_subscription(AccelWithCovarianceStamped, "~/input/acceleration", self.onAcceleration, 10)
 
         ## Vehicle odometry subscriber ##
-        self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 1)
+        self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 10)
+
+        ## Vehicle odometry subscriber ##
+        self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 10)
 
 
-
-        # Trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
-        self.pub_trajectory_ = self.create_publisher(Trajectory, 
-                                                     "~/output/trajectory", 
-                                                     1 )
+        # Path publisher. Remap "/planning/scenario_planning/lane_driving/path" ##
+        self.pub_path_ = self.create_publisher(Path, 
+                                               "~/output/path", 
+                                                10)
         
         
         # Initialize input ##
@@ -56,7 +58,7 @@ class CrankDrigingPlanner(Node):
     ## Check if input data is initialized. ##
     def isReady(self):
         if self.reference_trj is None:
-            self.get_logger().warning("The reference trajectory data has not ready yet.")
+            self.get_logger().warning("The reference path data has not ready yet.")
             return False
         if self.current_accel is None:
             self.get_logger().warning("The accel data has not ready yet.")
@@ -97,14 +99,16 @@ class CrankDrigingPlanner(Node):
         self.current_accel = accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
 
 
-    ## Callback function for trajectory subscriber ##
-    def onTrigger(self, msg: Trajectory):
-        self.get_logger().info("Get trajectory. Processing crank driving planner...")
+    ## Callback function for path subscriber ##
+    def onTrigger(self, msg: Path):
+        self.get_logger().info("Get path. Processing crank driving planner...")
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
-        self.reference_trj = msg
-        
+        self.reference_path = msg
+        self.pub_path_.publish(self.reference_path)
+
+        return
         if not self.isReady():
-            self.pub_trajectory_.publish(self.reference_trj)
+            self.pub_path_.publish(self.reference_path)
             return
 
         exec_optim = True
@@ -112,7 +116,7 @@ class CrankDrigingPlanner(Node):
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
             exec_optim = False
-            self.pub_trajectory_.publish(self.reference_trj)
+            self.pub_path_.publish(self.reference_trj)
 
         elif self.vehicle_state == "planning":
             self.get_logger().info("Planning now")
@@ -121,39 +125,39 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
                 return 
 
-        ## If vehicle is not stopped, publish reference trajectory ##
+        ## If vehicle is not stopped, publish reference path ##
         if exec_optim:
             
             points = self.reference_trj.points
             self.get_logger().info("Points num {}".format(len(points)))
             self.get_logger().info("Vehicle is stopped")
-            points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
-            points_pose_list = getPosesFromTrajectory(self.reference_trj)
-            points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
+            #points_vel_list = getVelocityPointsFromTrajectory(self.reference_trj)
+            #points_pose_list = getPosesFromTrajectory(self.reference_trj)
+            #points_accel_list = getAccelPointsFromTrajectory(self.reference_trj)
             
             ego_pose_ = ConvertPoint2List(self.ego_pose.position)
 
-            n_p_idx = getNearestPointIndex(ego_pose_, points_pose_list)
+            #n_p_idx = getNearestPointIndex(ego_pose_, points_pose_list)
 
-            self.get_logger().info("Nearest point: {} {} {}".format(
-                n_p_idx, points_pose_list[n_p_idx], points_vel_list[n_p_idx]))
+            #self.get_logger().info("Nearest point: {} {} {}".format(
+            #    n_p_idx, points_pose_list[n_p_idx], points_vel_list[n_p_idx]))
             
             
             ## Path Optimize ##
             #
             n_p_idx += 5
-            for k in range(50):
-                #print(self.reference_trj.points[n_p_idx + k].pose.position)
-                self.reference_trj.points[n_p_idx + k].pose.position.y -= 3.0
-                self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.5
-                self.reference_trj.points[n_p_idx + k].longitudinal_velocity_mps = 5.0
+            #for k in range(50):
+            #    #print(self.reference_trj.points[n_p_idx + k].pose.position)
+            #    self.reference_trj.points[n_p_idx + k].pose.position.y -= 3.0
+            #    self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.5
+            #    self.reference_trj.points[n_p_idx + k].longitudinal_velocity_mps = 5.0
             
             
-            self.pub_trajectory_.publish(self.reference_trj)
+            #self.pub_trajectory_.publish(self.reference_trj)
             self.before_exec_time = self.get_clock().now().nanoseconds
             self.vehicle_state = "planning"
         else:
-            self.pub_trajectory_.publish(self.reference_trj)
+            self.pub_path_.publish(self.reference_trj)
 
 
 def main(args=None):
