@@ -52,14 +52,12 @@ class CrankDrigingPlanner(Node):
         current_time = self.get_clock().now().nanoseconds
         self.nano_seconds = 1000**3
         self.before_exec_time = -9999 * self.nano_seconds
-        self.duration = 1.0
+        self.duration = 10.0
 
         self.stop_time = 0.0
         self.stop_duration = 30
 
         print(current_time/self.nano_seconds)
-        if (current_time - self.before_exec_time)/(self.nano_seconds) > self.duration:
-            print((current_time - self.before_exec_time)/(self.nano_seconds))
         
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -92,11 +90,13 @@ class CrankDrigingPlanner(Node):
         self.crrent_vel = self.current_odometry.twist.twist.linear.x
         #self.get_logger().info("odometry {}".format(self.current_odometry.pose.pose))
 
+        if self.vehicle_state == "planning":
+            return 
+
         if self.crrent_vel > 0:
             self.vehicle_state = "drive"
             self.stop_time = 0.0
         else:
-            self.vehicle_state = "drive"
             self.stop_time += 0.1
 
         if self.stop_time > self.stop_duration:
@@ -117,28 +117,27 @@ class CrankDrigingPlanner(Node):
     ## Callback function for trajectory subscriber ##
     def onTrigger(self, msg: Trajectory):
         self.get_logger().info("Get trajectory. Processing crank driving planner...")
+        self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
         self.reference_trj = msg
         
-
         if not self.isReady():
             self.pub_trajectory_.publish(self.reference_trj)
             return
 
-        #self.get_logger().info("CurrentVel {}".format(self.crrent_vel))
-
         exec_optim = True
+
         ## If the vehicke is driving, not execute optimize. ##
-        if self.vehicle_state == "drive" or self.vehicle_state == "planning":
+        if self.vehicle_state == "drive":
             exec_optim = False
             self.pub_trajectory_.publish(self.reference_trj)
 
-        current_time = self.get_clock().now().nanoseconds
-        if (current_time - self.before_exec_time)/(self.nano_seconds) < self.duration:
-            self.pub_trajectory_.publish(self.reference_trj)
+        elif self.vehicle_state == "planning":
+            self.get_logger().info("Planning now")
+            waite_time = (self.get_clock().now().nanoseconds - self.before_exec_time)/(self.nano_seconds)
+            if waite_time < self.duration:
+                self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
+                return 
 
-        #self.get_logger().info("Time diff{}".format((current_time - self.before_exec_time)/()))
-
-        self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
         ## If vehicle is not stopped, publish reference trajectory ##
         if exec_optim:
             
@@ -159,11 +158,11 @@ class CrankDrigingPlanner(Node):
             
             ## Path Optimize ##
             #
-            
-            for k in range(15):
+            n_p_idx += 5
+            for k in range(50):
                 #print(self.reference_trj.points[n_p_idx + k].pose.position)
-                self.reference_trj.points[n_p_idx + k].pose.position.y -= 0.5
-                #self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.0
+                self.reference_trj.points[n_p_idx + k].pose.position.y -= 3.0
+                self.reference_trj.points[n_p_idx + k].acceleration_mps2 = 0.5
                 self.reference_trj.points[n_p_idx + k].longitudinal_velocity_mps = 5.0
             
             
