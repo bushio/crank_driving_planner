@@ -25,8 +25,6 @@ class CrankDrigingPlanner(Node):
         ## Vehicle odometry subscriber ##
         self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 1)
 
-        ## Velocity report subscriber ##
-        #self.create_subscription(VelocityReport, "~/input/velocity_report", self.onVelocityReport, 1)
 
         # Motion state subscriber ##
         self.create_subscription(MotionState, "~/input/motion_state", self.onMotion, 1)
