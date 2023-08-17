@@ -4,6 +4,7 @@ import numpy as np
 from rclpy.node import Node
 from autoware_auto_planning_msgs.msg import Trajectory, Path
 from geometry_msgs.msg import AccelWithCovarianceStamped, Point
+from autoware_auto_perception_msgs.msg import PredictedObjects
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
 from .trajectory_uitl import *
@@ -15,7 +16,7 @@ class CrankDrigingPlanner(Node):
         super().__init__('CrankDrigingPlanner')
         self.get_logger().info("Start CrankDrigingPlanner")
         
-        ## Reference trajectory subscriber. Remap "obstacle_stop_planner/trajectory" ##
+        ## Reference trajectory subscriber. Remap "/planning/scenario_planning/lane_driving/behavior_planning/path" ##
         self.create_subscription(Path ,"~/input/path", self.onTrigger, 10)
 
         ## Accrel subscriber ##
@@ -32,20 +33,18 @@ class CrankDrigingPlanner(Node):
         self.pub_path_ = self.create_publisher(Path, 
                                                "~/output/path", 
                                                 10)
-        
+        # Predicted objects subscriber
+        self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
         
         # Initialize input ##
         self.reference_trj = None
         self.current_accel = None
         self.current_odometry = None
-        self.crrent_velocity_report = None
         self.crrent_longitudinal_velocity = 0.0
         self.ego_pose = None
-        self.motion_state = None
+        self.dynamic_objects = None
 
         self.vehicle_state = "stop"
-        
-        current_time = self.get_clock().now().nanoseconds
         self.nano_seconds = 1000**3
         self.before_exec_time = -9999 * self.nano_seconds
         self.duration = 10.0
@@ -53,8 +52,8 @@ class CrankDrigingPlanner(Node):
         self.stop_time = 0.0
         self.stop_duration = 30
 
-        print(current_time/self.nano_seconds)
         
+
     ## Check if input data is initialized. ##
     def isReady(self):
         if self.reference_trj is None:
@@ -66,9 +65,7 @@ class CrankDrigingPlanner(Node):
         if self.current_odometry is None:
             self.get_logger().warning("The odometry data has not ready yet.")
             return False
-        #if self.crrent_velocity_report is None:
-        #    self.get_logger().warning("The velocity report data has not ready yet.")
-        #    return False
+
         if self.ego_pose is None:
                 self.get_logger().warning("The ego pose data has not ready yet.")
                 return False
@@ -98,12 +95,18 @@ class CrankDrigingPlanner(Node):
         # return geometry_msgs/Accel 
         self.current_accel = accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
 
+    ## Callback function for predicted objects ##
+    def onPerception(self, msg: PredictedObjects):
+        self.dynamic_objects = msg
 
     ## Callback function for path subscriber ##
     def onTrigger(self, msg: Path):
         self.get_logger().info("Get path. Processing crank driving planner...")
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
         self.reference_path = msg
+
+        if self.dynamic_objects is not None:
+            self.get_logger().info("Objects num {}".format(len(self.dynamic_objects.objects)))
         self.pub_path_.publish(self.reference_path)
 
         return
