@@ -4,7 +4,6 @@
   <arg name="output_crank_driving_trajectory" default="/crank_driving_planner/trajectory"/>
   <arg name="input_acceleration" default="/localization/acceleration"/>
   <arg name="input_odometry" default="/localization/kinematic_state"/>
-  <arg name="input_motion_state" default="/api/motion/state"/>
 
   <node pkg="crank_driving_planner" exec="crank_driving_planner_node" name="crank_driving_planner" output="screen">
     <remap from="~/input/trajectory" to="$(var input_crank_driving_trajectory)"/>

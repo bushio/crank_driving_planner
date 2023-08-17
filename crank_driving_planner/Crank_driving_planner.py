@@ -6,7 +6,6 @@ from autoware_auto_planning_msgs.msg import Trajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped, Point
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
-from autoware_adapi_v1_msgs.msg import MotionState
 from .trajectory_uitl import *
 
 #from motion_utils import calcLongitudinalOffsetPose
@@ -25,9 +24,6 @@ class CrankDrigingPlanner(Node):
         ## Vehicle odometry subscriber ##
         self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 1)
 
-
-        # Motion state subscriber ##
-        self.create_subscription(MotionState, "~/input/motion_state", self.onMotion, 1)
 
 
         # Trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
@@ -76,11 +72,6 @@ class CrankDrigingPlanner(Node):
                 return False
         return True
 
-    ## Callback function for motion state subscriber ##
-    def onMotion(self, msg: MotionState):
-        self.motion_state = msg
-
-
     ## Callback function for odometry subscriber ##
     def onOdometry(self, msg: Odometry):
         self.current_odometry = msg
@@ -104,12 +95,6 @@ class CrankDrigingPlanner(Node):
     def onAcceleration(self, msg: AccelWithCovarianceStamped):
         # return geometry_msgs/Accel 
         self.current_accel = accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
-
-
-    ## Callback function for velocity report subscriber ##
-    #def onVelocityReport(self, msg: VelocityReport):
-    #    self.crrent_velocity_report = msg
-    #    self.crrent_longitudinal_velocity = msg.longitudinal_velocity
 
 
     ## Callback function for trajectory subscriber ##
