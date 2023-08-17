@@ -8,6 +8,7 @@ from autoware_auto_perception_msgs.msg import PredictedObjects
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
 from .trajectory_uitl import *
+from .predicted_objects_info import PredictedObjectsInfo
 
 #from motion_utils import calcLongitudinalOffsetPose
 
@@ -107,6 +108,9 @@ class CrankDrigingPlanner(Node):
 
         if self.dynamic_objects is not None:
             self.get_logger().info("Objects num {}".format(len(self.dynamic_objects.objects)))
+            obj_info = PredictedObjectsInfo (self.dynamic_objects.objects)
+
+
         self.pub_path_.publish(self.reference_path)
 
         return
