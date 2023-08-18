@@ -13,6 +13,8 @@ from .predicted_objects_info import PredictedObjectsInfo
 from .config import Config
 from .dynamic_window_approach import DynamicWindowApproach
 
+from .debug_plot import PlotMarker
+
 #from motion_utils import calcLongitudinalOffsetPose
 
 class CrankDrigingPlanner(Node):
@@ -48,13 +50,15 @@ class CrankDrigingPlanner(Node):
         self.ego_pose = None
         self.dynamic_objects = None
 
-        self.vehicle_state = "stop"
+        self.vehicle_state = "drive"
         self.nano_seconds = 1000**3
         self.before_exec_time = -9999 * self.nano_seconds
         self.duration = 10.0
 
         self.stop_time = 0.0
         self.stop_duration = 30
+
+        self.plot_marker = PlotMarker()
 
         
 
@@ -80,7 +84,7 @@ class CrankDrigingPlanner(Node):
         self.current_odometry = msg
         self.ego_pose = self.current_odometry.pose.pose
         self.crrent_vel = self.current_odometry.twist.twist.linear.x
-        #self.get_logger().info("odometry {}".format(self.current_odometry.pose.pose))
+        #self.get_logger().info("odometry {}".format(self.current_odometry.pose))
 
         if self.vehicle_state == "planning":
             return 
@@ -108,22 +112,32 @@ class CrankDrigingPlanner(Node):
         self.get_logger().info("Get path. Processing crank driving planner...")
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
         self.reference_path = msg
-
+        obj_pose = None
         if self.dynamic_objects is not None:
             self.get_logger().info("Objects num {}".format(len(self.dynamic_objects.objects)))
             obj_info = PredictedObjectsInfo (self.dynamic_objects.objects)
-
+            obj_pose = obj_info.objects_rectangle
 
         if not self.isReady():
+            self.get_logger().info("Not ready")
             self.pub_path_.publish(self.reference_path)
             return 
-            
-        exec_optim = True
+
+        
+        ego_pose_ = ConvertPoint2List(self.ego_pose)
+        
+        left_bound = ConvertPointSeq2Array(self.reference_path.left_bound)
+        right_bound = ConvertPointSeq2Array(self.reference_path.right_bound)
+        self.plot_marker.plot_status(ego_pose_, 
+                                    object_pose =obj_pose, 
+                                    left_bound=left_bound,
+                                    right_bound=right_bound,
+                                    )
 
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
-            exec_optim = False
-            self.pub_path_.publish(self.reference_trj)
+            self.get_logger().info("Publish reference path")
+            self.pub_path_.publish(self.reference_path)
             return
 
         elif self.vehicle_state == "planning":
@@ -133,22 +147,22 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
                 return 
 
+
+
+        #=============
+        self.get_logger().info("Publish optimized path")
+
         ## If vehicle is not stopped, publish reference path ##
-        if exec_optim:
-            
-            points = self.reference_path.points
-            self.get_logger().info("Points num {}".format(len(points)))
-            ego_pose_ = ConvertPoint2List(self.ego_pose.position)
-            
-            self.get_logger().info("Left bound{}".format(self.reference_path.left_bound))
-            ## Path Optimize ##
+        points = self.reference_path.points
+        self.get_logger().info("Points num {}".format(len(points)))
+        ego_pose_ = ConvertPoint2List(self.ego_pose)
+        
+        self.get_logger().info("Left bound{}".format(self.reference_path.left_bound))
+        ## Path Optimize ##
 
-            self.before_exec_time = self.get_clock().now().nanoseconds
-            self.vehicle_state = "planning"
-            self.pub_path_.publish(self.reference_path)
-        else:
-            self.pub_path_.publish(self.reference_path)
-
+        self.before_exec_time = self.get_clock().now().nanoseconds
+        self.vehicle_state = "planning"
+        self.pub_path_.publish(self.reference_path)
 
 def main(args=None):
     print('Hi from CrankDrigingPlanner')

@@ -26,13 +26,13 @@ class PredictedObjectsInfo:
                 continue
 
             object_points = shape_array  + pose
-            
+
             xmin = np.min(object_points[:, 0])
             ymin = np.min(object_points[:, 1])
             xmax = np.max(object_points[:, 0])
             ymax = np.max(object_points[:, 1])
-            cx = (xmax - xmin)/ 2.0
-            cy = (ymax - ymin)/ 2.0
+            cx = (xmax + xmin)/ 2.0
+            cy = (ymax + ymin)/ 2.0
             length_x = abs(xmax - xmin)
             length_y = abs(ymax - ymin)
             rect = np.array([cx, cy ,length_x ,length_y])
