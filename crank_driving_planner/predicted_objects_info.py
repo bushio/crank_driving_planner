@@ -11,7 +11,7 @@ class PredictedObjectsInfo:
         self.objects_poses = np.empty((0,2)) ## Store each points (x, y)
         self.show_objects_plot = show_objects_plot
         self.objects_rectangle = np.empty((0,4))
-
+        self.car_shape = [[1.0, 0.5],[-1.0, -0.5]]
         self.objects_vis_box =  []
 
         self.objects_labels = []
@@ -25,7 +25,7 @@ class PredictedObjectsInfo:
             shape_array = self._getShapeArrayfromPredictedObjectKinematics(ob.shape)
             
             if len(shape_array) == 0:
-                shape_array = [[2.5, 2.5],[-2.5, -2.5]]
+                shape_array = self.car_shape
 
             object_points = shape_array  + pose
 

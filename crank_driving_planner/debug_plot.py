@@ -70,19 +70,25 @@ class PlotMarker():
 
             ## Plot object pose
             if object_pose is not None:
-                object_xy = object_pose[:,0:2] 
-                object_wh = object_pose[:,2:4]
-                if rotation:
-                    object_xy = object_xy[:,0:2] - ego_pose_origin[0:2] 
-                    object_xy = object_xy[:,0:2] @ self.map_rot
-                    object_wh = object_wh[:,0:2] @ self.map_rot_wh
-                else:
-                    object_xy_min = object_xy - object_wh / 2.0
-                    object_xy_max = object_xy + object_wh / 2.0     
-                object_xy_min = object_xy - object_wh / 2.0
-                object_xy_max = object_xy + object_wh / 2.0
-                plt.plot(object_xy_min[:,0], object_xy_min[:,1], "ob")
-                plt.plot(object_xy_max[:,0], object_xy_max[:,1], "ob")
+                for ob in object_pose:
+                    object_xy = ob[0:2] 
+                    object_wh = ob[2:4]
+                    if rotation:
+                        object_xy = object_xy[0:2] - ego_pose_origin[0:2] 
+                        object_xy = object_xy[0:2] @ self.map_rot
+                        object_wh = object_wh[0:2] @ self.map_rot_wh
+
+                    object_x_min = object_xy[0] - object_wh[0] / 2.0
+                    object_y_min = object_xy[1] - object_wh[1] / 2.0
+                    object_x_max = object_xy[0] + object_wh[0] / 2.0
+                    object_y_max = object_xy[1] + object_wh[1] / 2.0
+                    ob_box = np.array([[object_x_min, object_y_min],
+                                       [object_x_min, object_y_max],
+                                       [object_x_max, object_y_max],
+                                       [object_x_max, object_y_min],
+                                       [object_x_min, object_y_min]])
+
+                    plt.plot(ob_box[:,0], ob_box [:,1], "blue")
 
             ## Plot path pose
             if (left_bound is not None) and (right_bound is not None):
@@ -92,9 +98,9 @@ class PlotMarker():
 
                     right_bound = right_bound[:,0:2] - ego_pose_origin[0:2] 
                     right_bound = right_bound[:,0:2] @ self.map_rot
-                print(left_bound)
-                plt.plot(left_bound[0:2, 0], left_bound[0:2, 1], color="black")
-                plt.plot(right_bound[0:2,0], right_bound[0:2,1], color="black")
+
+                plt.plot(left_bound[:, 0], left_bound[:, 1], color="black")
+                plt.plot(right_bound[:,0], right_bound[:,1], color="black")
 
                 if (index_min is not None) and (index_max is not None):
                     plt.plot(left_bound[index_min:index_max + 1 , 0], left_bound[index_min:index_max + 1, 1], color="green")
@@ -102,7 +108,7 @@ class PlotMarker():
                     
             plt.xlim(plot_xmin, plot_xmax)
             plt.ylim(plot_ymin, plot_ymax)
-            plt.grid(True)
+            #plt.grid(True)
             plt.pause(0.01)
             #plt.show()
 
