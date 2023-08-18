@@ -7,6 +7,7 @@ from geometry_msgs.msg import AccelWithCovarianceStamped, Point
 from autoware_auto_perception_msgs.msg import PredictedObjects
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
+
 from .trajectory_uitl import *
 from .predicted_objects_info import PredictedObjectsInfo
 
@@ -14,8 +15,6 @@ from .config import Config
 from .dynamic_window_approach import DynamicWindowApproach
 
 from .debug_plot import PlotMarker
-
-#from motion_utils import calcLongitudinalOffsetPose
 
 class CrankDrigingPlanner(Node):
     def __init__(self):
@@ -91,13 +90,14 @@ class CrankDrigingPlanner(Node):
     def onOdometry(self, msg: Odometry):
         self.current_odometry = msg
         self.ego_pose = self.current_odometry.pose.pose
-        self.crrent_vel = self.current_odometry.twist.twist.linear.x
+        self.crrent_vel_x = self.current_odometry.twist.twist.linear.x
+        self.crrent_vel_y = self.current_odometry.twist.twist.linear.y
         #self.get_logger().info("odometry {}".format(self.current_odometry.pose))
 
         if self.vehicle_state == "planning":
             return 
 
-        if self.crrent_vel > 0:
+        if self.crrent_vel_x > 0:
             self.vehicle_state = "drive"
             self.stop_time = 0.0
         else:

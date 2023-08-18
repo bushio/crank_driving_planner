@@ -1,6 +1,7 @@
 
 from autoware_auto_planning_msgs.msg import Trajectory
 from geometry_msgs.msg import Point
+import math
 import numpy as np
 
 
@@ -35,9 +36,9 @@ def getNearestPointIndex(point, points) -> int:
     return idx 
 
 def ConvertPoint2List(p) -> np.array:
-    div = p.orientation.x ** 2 + p.orientation.y **2 - p.orientation.z **2 - p.orientation.w **2
-    yaw = np.arctan(2 *(p.orientation.x * p.orientation.w +  p.orientation.y * p.orientation.z)
-                        / div)
+    siny_cosp = 2 * (p.orientation.w * p.orientation.z + p.orientation.x * p.orientation.y)
+    cosy_cosp = 1 - 2 * (p.orientation.y * p.orientation.y + p.orientation.z * p.orientation.z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
     return np.array([p.position.x, p.position.y, yaw])
 
 
