@@ -115,7 +115,6 @@ class CrankDrigingPlanner(Node):
     def onPerception(self, msg: PredictedObjects):
         self.dynamic_objects = msg
 
-
     def _near_path_search(self, ego_pose, left_bound, right_bound):
         path_min_index = self.current_path_index
         path_max_index = self.current_path_index + 1 
@@ -123,7 +122,7 @@ class CrankDrigingPlanner(Node):
         diff_right = np.linalg.norm(ego_pose[0:2] - right_bound[self.current_path_index + 1])
 
         if diff_left < self.change_next_path or diff_right < self.change_next_path:
-            path_min_index = self.current_path_index - 1
+            path_min_index = self.current_path_index
             path_max_index = self.current_path_index + 1 
             self.current_path_index += 1
 
