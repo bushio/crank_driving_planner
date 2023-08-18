@@ -15,14 +15,17 @@ class PlotMarker():
         self.map_rot_wh = np.array([[math.cos(self.map_yaw), 0],
                                     [0, math.sin(self.map_yaw)]])
         
+        self.ego_vec_length = 3
         self.robot_length = 3.5
         self.robot_width = 1.5
+
     def plot_status(self,
                     ego_pose = None,
                     object_pose = None,
                     left_bound = None,
                     right_bound = None,
                     index_min= None,
+                    path=None,
                     index_max=None,
                     rotation = False,
                     ):
@@ -61,8 +64,8 @@ class PlotMarker():
             plt.plot(np.array(outline[0, :]).flatten(),
                     np.array(outline[1, :]).flatten(), "-k")
             
-
-            ego_vec = np.array([np.cos(yaw), np.sin(yaw)]) *3
+            ## Plot allow
+            ego_vec = np.array([np.cos(yaw), np.sin(yaw)]) * self.ego_vec_length
             ego_vec = ego_pose[0:2] + ego_vec
             trajec = np.array([[ego_pose[0], ego_pose[1]],
                               [ego_vec[0], ego_vec[1]]])
@@ -90,7 +93,11 @@ class PlotMarker():
 
                     plt.plot(ob_box[:,0], ob_box [:,1], "blue")
 
-            ## Plot path pose
+            if path is not None:
+                self.plot_path(path)
+
+
+            ## Plot bound
             if (left_bound is not None) and (right_bound is not None):
                 if rotation:
                     left_bound = left_bound[:,0:2] - ego_pose_origin[0:2] 
@@ -108,12 +115,12 @@ class PlotMarker():
                     
             plt.xlim(plot_xmin, plot_xmax)
             plt.ylim(plot_ymin, plot_ymax)
-            #plt.grid(True)
             plt.pause(0.01)
             #plt.show()
 
         else:
             return 
 
-
+    def plot_path(self, path):
+        plt.plot(path[:, 0], path[:, 1], color="yellow")
 

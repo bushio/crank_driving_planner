@@ -171,15 +171,16 @@ class CrankDrigingPlanner(Node):
 
         ## Visualize objects, vehicle and path on matplotlib
         if self.animation_flag:
+            reference_path_array = ConvertPath2Array(self.reference_path)
             self.plot_marker.plot_status(ego_pose_, 
                                         object_pose =obj_pose, 
                                         left_bound=self.left_bound,
                                         right_bound=self.right_bound,
                                         index_min=path_min_index, 
                                         index_max =path_max_index,
+                                        path=reference_path_array,
                                         )
         
-
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
             self.get_logger().info("Publish reference path")

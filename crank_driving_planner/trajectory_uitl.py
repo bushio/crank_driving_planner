@@ -1,5 +1,5 @@
 
-from autoware_auto_planning_msgs.msg import Trajectory
+from autoware_auto_planning_msgs.msg import Trajectory, Path
 from geometry_msgs.msg import Point
 import math
 import numpy as np
@@ -35,10 +35,9 @@ def getNearestPointIndex(point, points) -> int:
             idx = i
     return idx 
 
+
 def ConvertPoint2List(p) -> np.array:
-    siny_cosp = 2 * (p.orientation.w * p.orientation.z + p.orientation.x * p.orientation.y)
-    cosy_cosp = 1 - 2 * (p.orientation.y * p.orientation.y + p.orientation.z * p.orientation.z)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
+    yaw = getYawFromQuaternion(p.orientation)
     return np.array([p.position.x, p.position.y, yaw])
 
 
@@ -51,8 +50,25 @@ def calcDistancePoits(point_a: list, point_b: list) -> float:
         return 0.0
     return np.linalg.norm(np.array(point_a) - np.array(point_b))
 
-def ConvertPointSeq2Array(points) -> np.array:
+
+def ConvertPointSeq2Array(points: list) -> np.array:
     k = []
     for i in range(len(points)):
         k.append([points[i].x, points[i].y])
     return np.array(k)
+
+
+def ConvertPath2Array(path: Path) -> np.array:
+    new_path = np.empty((0,3))
+    for idx in range(len(path.points)):
+        x = path.points[idx].pose.position.x
+        y = path.points[idx].pose.position.y
+        yaw = getYawFromQuaternion(path.points[idx].pose.orientation)
+        new_path = np.vstack([new_path, np.array([x, y, yaw])])
+    return new_path
+
+
+def getYawFromQuaternion(orientation):
+    siny_cosp = 2 * (orientation.w * orientation.z + orientation.x * orientation.y)
+    cosy_cosp = 1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
+    return np.arctan2(siny_cosp, cosy_cosp)
