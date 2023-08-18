@@ -34,8 +34,11 @@ def getNearestPointIndex(point, points) -> int:
             idx = i
     return idx 
 
-def ConvertPoint2List(p :Point) ->list:
-    return [p.x, p.y, p.z]
+def ConvertPoint2List(p) -> np.array:
+    div = p.orientation.x ** 2 + p.orientation.y **2 - p.orientation.z **2 - p.orientation.w **2
+    yaw = np.arctan(2 *(p.orientation.x * p.orientation.w +  p.orientation.y * p.orientation.z)
+                        / div)
+    return np.array([p.position.x, p.position.y, yaw])
 
 
 def calcDistancePoits(point_a: list, point_b: list) -> float:
@@ -46,3 +49,9 @@ def calcDistancePoits(point_a: list, point_b: list) -> float:
         print("Shape of the poits must be same.")
         return 0.0
     return np.linalg.norm(np.array(point_a) - np.array(point_b))
+
+def ConvertPointSeq2Array(points) -> np.array:
+    k = []
+    for i in range(len(points)):
+        k.append([points[i].x, points[i].y])
+    return np.array(k)
