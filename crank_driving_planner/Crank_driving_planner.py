@@ -41,6 +41,10 @@ class CrankDrigingPlanner(Node):
         # Predicted objects subscriber
         self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
         
+
+        self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
+
+
         # Initialize input ##
         self.reference_path = None
         self.current_accel = None
@@ -204,7 +208,7 @@ class CrankDrigingPlanner(Node):
         #==== Optimize path ====
         #=======================
         new_path = self.optimize_path(self.reference_path, self.ego_pose)
-        self.pub_path_.publish(new_path)
+        
 
     def optimize_path(self, reference_path, ego_pose):
         new_path = reference_path
@@ -214,18 +218,29 @@ class CrankDrigingPlanner(Node):
         nearest_idx = np.argmin(dist, axis=0)[0]
 
         ## If vehicle is not stopped, publish reference path ##
-        points = self.reference_path.points
+        points = new_path.points
         self.get_logger().info("Publish optimized path")
         self.get_logger().info("Points num {}".format(len(points)))
         self.get_logger().info("Nearest idx {}".format(nearest_idx))
-        #for idx in range(50):
-            #new_path.points[nearest_idx - idx].pose.position.y -= 0.5
+        
+        ## Generate trajectory
+        output_traj = Trajectory()
+        output_traj.points = convertPathToTrajectoryPoints(self.reference_path)
+        output_traj.header = new_path.header
+
+        offset = 0.2
+        for idx in range(20):
+            output_traj.points[nearest_idx - idx].pose.position.y -= offset
+            offset += 0.25
             #print(np.linalg.norm(reference_path_array[idx, 0:2] - reference_path_array[idx - 1, 0:2]))
             
         ## Path Optimize ##
         self.before_exec_time = self.get_clock().now().nanoseconds
         self.vehicle_state = "planning"
-        return new_path 
+
+        self.pub_traj_.publish(output_traj)
+        #self.pub_path_.publish(new_path)
+        #return new_path 
 
 def main(args=None):
     print('Hi from CrankDrigingPlanner')

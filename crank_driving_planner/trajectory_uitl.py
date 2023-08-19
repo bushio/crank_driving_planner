@@ -1,5 +1,5 @@
 
-from autoware_auto_planning_msgs.msg import Trajectory, Path
+from autoware_auto_planning_msgs.msg import Trajectory, Path, TrajectoryPoint
 from geometry_msgs.msg import Point
 import math
 import numpy as np
@@ -72,3 +72,32 @@ def getYawFromQuaternion(orientation):
     siny_cosp = 2 * (orientation.w * orientation.z + orientation.x * orientation.y)
     cosy_cosp = 1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
     return np.arctan2(siny_cosp, cosy_cosp)
+
+
+def convertPathToTrajectoryPoints(path: Path):
+    tps = []
+    for idx in reversed(range(len(path.points))):
+        p = path.points[idx]
+        tp = TrajectoryPoint()
+        tp.pose = p.pose
+        tp.longitudinal_velocity_mps = p.longitudinal_velocity_mps
+        tp.acceleration_mps2 = 0.0
+        tps.append(tp)
+    return tps
+
+#
+"""
+inline TrajectoryPoints convertPathToTrajectoryPoints(const PathWithLaneId & path)
+{
+  TrajectoryPoints tps;
+  for (const auto & p : path.points) {
+    TrajectoryPoint tp;
+    tp.pose = p.point.pose;
+    tp.longitudinal_velocity_mps = p.point.longitudinal_velocity_mps;
+    // since path point doesn't have acc for now
+    tp.acceleration_mps2 = 0;
+    tps.emplace_back(tp);
+  }
+  return tps;
+}
+"""
