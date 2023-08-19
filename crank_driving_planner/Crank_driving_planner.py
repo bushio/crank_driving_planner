@@ -11,10 +11,11 @@ from nav_msgs.msg import Odometry
 from .trajectory_uitl import *
 from .predicted_objects_info import PredictedObjectsInfo
 
+## For plot
+from .debug_plot import PlotMarker
+# Dynamic Window Approach
 from .config import Config
 from .dynamic_window_approach import DynamicWindowApproach
-
-from .debug_plot import PlotMarker
 
 class CrankDrigingPlanner(Node):
     def __init__(self):
@@ -71,6 +72,13 @@ class CrankDrigingPlanner(Node):
         
         if self.animation_flag:
             self.plot_marker = PlotMarker()
+
+        ## Dynamic Window Approach
+        self.dwa_config = Config()
+        self.predictor = DynamicWindowApproach(self.dwa_config)
+        self.ego_pose_predicted = None
+        self.predicted_goal_pose = None
+        self.predicted_trajectory = None
 
 
     ## Check if input data is initialized. ##
@@ -183,6 +191,8 @@ class CrankDrigingPlanner(Node):
                                         index_min=path_min_index, 
                                         index_max =path_max_index,
                                         path=reference_path_array,
+                                        predicted_goal_pose=self.predicted_goal_pose,
+                                        predicted_trajectory=self.predicted_trajectory
                                         )
         
         ## If the vehicke is driving, not execute optimize. ##
@@ -206,10 +216,10 @@ class CrankDrigingPlanner(Node):
         #=======================
         #==== Optimize path ====
         #=======================
-        new_path = self.optimize_path(self.reference_path, self.ego_pose)
+        self.optimize_path(self.reference_path, self.ego_pose, obj_pose, self.left_bound, self.right_bound)
         
 
-    def optimize_path(self, reference_path, ego_pose):
+    def optimize_path(self, reference_path, ego_pose, object_pose, left_bound, right_bound):
         new_path = reference_path
         reference_path_array = ConvertPath2Array(new_path)
         ego_pose_array = ConvertPoint2List(ego_pose)
@@ -227,17 +237,35 @@ class CrankDrigingPlanner(Node):
         output_traj.points = convertPathToTrajectoryPoints(self.reference_path)
         output_traj.header = new_path.header
 
+        #
+        goal_pose_offset = 10
+        goal_pose = [output_traj.points[nearest_idx - goal_pose_offset].pose.position.x,
+                     output_traj.points[nearest_idx - goal_pose_offset].pose.position.y]
+        #if self.ego_pose_predicted is None:
+        self.ego_pose_predicted = np.array([ego_pose_array[0], ## x value
+                                            ego_pose_array[1], ## y value
+                                            ego_pose_array[2], ## yaw
+                                            0, ## vel
+                                            0, ## yaw vel
+                                            ])
+        u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, goal_pose, object_pose, left_bound, right_bound)
         offset = 0.2
-        for idx in range(20):
-            output_traj.points[nearest_idx - idx].pose.position.y -= offset
-            offset += 0.25
+        #for idx in range(len(predicted_traj)):
+        #    output_traj.points[nearest_idx - idx].pose.position.x = predicted_traj[idx][0]
+        #    output_traj.points[nearest_idx - idx].pose.position.y = predicted_traj[idx][1]
             #print(np.linalg.norm(reference_path_array[idx, 0:2] - reference_path_array[idx - 1, 0:2]))
-            
+
         ## Path Optimize ##
         self.before_exec_time = self.get_clock().now().nanoseconds
         self.vehicle_state = "planning"
 
-        self.pub_traj_.publish(output_traj)
+        if self.animation_flag:
+            self.get_logger().info("Nearest points {}".format(output_traj.points[nearest_idx - goal_pose_offset].pose.position))
+            self.get_logger().info("goal pose {}".format(goal_pose))
+            #self.get_logger().info("predicted traj {}".format(predicted_traj))
+            self.predicted_goal_pose = goal_pose
+            self.predicted_trajectory = predicted_traj
+        #self.pub_traj_.publish(output_traj)
         #self.pub_path_.publish(new_path)
         #return new_path 
 

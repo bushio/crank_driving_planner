@@ -28,6 +28,8 @@ class PlotMarker():
                     path=None,
                     index_max=None,
                     rotation = False,
+                    predicted_goal_pose=None,
+                    predicted_trajectory=None
                     ):
         
         if ego_pose is not None:
@@ -111,7 +113,15 @@ class PlotMarker():
                 if (index_min is not None) and (index_max is not None):
                     plt.plot(left_bound[index_min:index_max + 1 , 0], left_bound[index_min:index_max + 1, 1], color="green")
                     plt.plot(right_bound[index_min:index_max + 1, 0], right_bound[index_min:index_max + 1, 1], color="green")
-                    
+
+            ## Plot goal pose
+            if predicted_goal_pose is not None:
+                self.plot_point(predicted_goal_pose)
+            
+            ## Plot trajectory
+            if predicted_trajectory is not None:
+                self.plot_traj(predicted_trajectory)
+
             plt.xlim(plot_xmin, plot_xmax)
             plt.ylim(plot_ymin, plot_ymax)
             plt.pause(0.01)
@@ -123,3 +133,11 @@ class PlotMarker():
     def plot_path(self, path):
         plt.plot(path[:, 0], path[:, 1], color="yellow", marker=".")
         #plt.plot(path[:, 0], path[:, 1], color="yellow")
+
+    def plot_traj(self, traj):
+        plt.plot(traj[:, 0], traj[:, 1], color="red")
+        plt.show()
+
+    def plot_point(self, point):
+        plt.plot(point[0], point[1], marker="x")
+
