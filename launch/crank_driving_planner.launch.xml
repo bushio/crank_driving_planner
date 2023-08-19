@@ -1,16 +1,18 @@
 <launch>
   
   <arg name="input_crank_driving_path" default="/planning/scenario_planning/lane_driving/behavior_planning/path"/>
-  <arg name="output_crank_driving_path" default="/crank_driving_planner/path"/>
   <arg name="input_acceleration" default="/localization/acceleration"/>
   <arg name="input_odometry" default="/localization/kinematic_state"/>
   <arg name="input_perception" default="/perception/object_recognition/objects"/>
+  <arg name="output_crank_driving_path" default="/crank_driving_planner/path"/>
+  <arg name="output_crank_driving_traj" default="/planning/scenario_planning/lane_driving/trajectory"/>
 
   <node pkg="crank_driving_planner" exec="crank_driving_planner_node" name="crank_driving_planner" output="screen">
     <remap from="~/input/path" to="$(var input_crank_driving_path)"/>
-    <remap from="~/output/path" to="$(var output_crank_driving_path)"/>
     <remap from="~/input/acceleration" to="$(var input_acceleration)"/>
     <remap from="~/input/odometry" to="$(var input_odometry)"/>
     <remap from="~/input/perception" to="$(var input_perception)"/>
+    <remap from="~/output/path" to="$(var output_crank_driving_path)"/>
+    <remap from="~/output/trajectory" to="$(var output_crank_driving_traj)"/>
   </node>
 </launch>

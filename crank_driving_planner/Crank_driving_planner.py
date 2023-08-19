@@ -33,17 +33,16 @@ class CrankDrigingPlanner(Node):
         ## Vehicle odometry subscriber ##
         self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 10)
 
+        # Predicted objects subscriber
+        self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
 
         # Path publisher. Remap "/planning/scenario_planning/lane_driving/path" ##
         self.pub_path_ = self.create_publisher(Path, 
                                                "~/output/path", 
                                                 10)
-        # Predicted objects subscriber
-        self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
-        
-
-        self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
-
+        # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
+        #self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
+        self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
 
         # Initialize input ##
         self.reference_path = None
