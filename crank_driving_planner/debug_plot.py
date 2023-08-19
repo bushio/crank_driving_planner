@@ -45,7 +45,6 @@ class PlotMarker():
             plt.plot(ego_pose[0], ego_pose[1], "xr")
 
             yaw = ego_pose_origin[2]
-            print(math.sin(yaw), math.cos(yaw))
             ego_rot = np.array([[math.cos(yaw), math.sin(yaw)],
                             [-math.sin(yaw), math.cos(yaw)]])
 
@@ -122,5 +121,5 @@ class PlotMarker():
             return 
 
     def plot_path(self, path):
-        plt.plot(path[:, 0], path[:, 1], color="yellow")
-
+        plt.plot(path[:, 0], path[:, 1], color="yellow", marker=".")
+        #plt.plot(path[:, 0], path[:, 1], color="yellow")

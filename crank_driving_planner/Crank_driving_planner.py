@@ -64,6 +64,7 @@ class CrankDrigingPlanner(Node):
         self.change_next_path = 3.0 #[m]
 
         self.animation_flag = True
+        self.debug = False
         
         if self.animation_flag:
             self.plot_marker = PlotMarker()
@@ -139,13 +140,14 @@ class CrankDrigingPlanner(Node):
 
     ## Callback function for path subscriber ##
     def onTrigger(self, msg: Path):
-        self.get_logger().info("Get path. Processing crank driving planner...")
-        self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
+        if self.debug:
+            self.get_logger().info("Get path. Processing crank driving planner...")
+            self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
         self.reference_path = msg
         obj_pose = None
 
         if self.dynamic_objects is not None:
-            self.get_logger().info("Objects num {}".format(len(self.dynamic_objects.objects)))
+            #self.get_logger().info("Objects num {}".format(len(self.dynamic_objects.objects)))
             obj_info = PredictedObjectsInfo (self.dynamic_objects.objects)
             obj_pose = obj_info.objects_rectangle
 
@@ -154,7 +156,7 @@ class CrankDrigingPlanner(Node):
             self.pub_path_.publish(self.reference_path)
             return 
 
-        ego_pose_ = ConvertPoint2List(self.ego_pose)
+        ego_pose_array = ConvertPoint2List(self.ego_pose)
 
         ## Set left and right bound
         if (self.left_bound is None) or (self.right_bound is None):
@@ -163,15 +165,15 @@ class CrankDrigingPlanner(Node):
 
         ## Initialize current path index
         if self.current_path_index is None:
-            self._get_nearest_path_idx(ego_pose_, self.left_bound, self.right_bound)
+            self._get_nearest_path_idx(ego_pose_array, self.left_bound, self.right_bound)
 
         ## Check current path index
-        path_min_index, path_max_index = self._near_path_search(ego_pose_, self.left_bound, self.right_bound)
+        path_min_index, path_max_index = self._near_path_search(ego_pose_array, self.left_bound, self.right_bound)
 
         ## Visualize objects, vehicle and path on matplotlib
         if self.animation_flag:
             reference_path_array = ConvertPath2Array(self.reference_path)
-            self.plot_marker.plot_status(ego_pose_, 
+            self.plot_marker.plot_status(ego_pose_array, 
                                         object_pose =obj_pose, 
                                         left_bound=self.left_bound,
                                         right_bound=self.right_bound,
@@ -182,36 +184,48 @@ class CrankDrigingPlanner(Node):
         
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
-            self.get_logger().info("Publish reference path")
+            if self.debug:
+                self.get_logger().info("Publish reference path")
             self.pub_path_.publish(self.reference_path)
             return
 
         elif self.vehicle_state == "planning":
-            self.get_logger().info("Planning now")
+            if self.debug:
+                self.get_logger().info("Planning now")
             waite_time = (self.get_clock().now().nanoseconds - self.before_exec_time)/(self.nano_seconds)
             if waite_time < self.duration:
                 self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
                 return 
-
+            else:
+                self.vehicle_state = "drive"
+                self.stop_time = 0.0
+                return
         #=======================
         #==== Optimize path ====
         #=======================
-        self.get_logger().info("Publish optimized path")
+        new_path = self.optimize_path(self.reference_path, self.ego_pose)
+        self.pub_path_.publish(new_path)
+
+    def optimize_path(self, reference_path, ego_pose):
+        new_path = reference_path
+        reference_path_array = ConvertPath2Array(new_path)
+        ego_pose_array = ConvertPoint2List(ego_pose)
+        dist = reference_path_array[: , 0:2] - ego_pose_array[0:2]
+        nearest_idx = np.argmin(dist, axis=0)[0]
 
         ## If vehicle is not stopped, publish reference path ##
         points = self.reference_path.points
+        self.get_logger().info("Publish optimized path")
         self.get_logger().info("Points num {}".format(len(points)))
-        ego_pose_ = ConvertPoint2List(self.ego_pose)
-        
-        self.get_logger().info("Left bound{}".format(self.reference_path.left_bound))
+        self.get_logger().info("Nearest idx {}".format(nearest_idx))
+        #for idx in range(50):
+            #new_path.points[nearest_idx - idx].pose.position.y -= 0.5
+            #print(np.linalg.norm(reference_path_array[idx, 0:2] - reference_path_array[idx - 1, 0:2]))
+            
         ## Path Optimize ##
-
         self.before_exec_time = self.get_clock().now().nanoseconds
         self.vehicle_state = "planning"
-        self.pub_path_.publish(self.reference_path)
-
-
-    
+        return new_path 
 
 def main(args=None):
     print('Hi from CrankDrigingPlanner')
