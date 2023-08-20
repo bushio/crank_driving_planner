@@ -135,8 +135,7 @@ class PlotMarker():
         #plt.plot(path[:, 0], path[:, 1], color="yellow")
 
     def plot_traj(self, traj):
-        plt.plot(traj[:, 0], traj[:, 1], color="red")
-        plt.show()
+        plt.plot(traj[:, 0], traj[:, 1], color="green", marker="^")
 
     def plot_point(self, point):
         plt.plot(point[0], point[1], marker="x")

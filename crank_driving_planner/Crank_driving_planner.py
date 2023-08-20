@@ -212,9 +212,9 @@ class CrankDrigingPlanner(Node):
                 self.stop_time = 0.0
                 return
 
-        #=======================
-        #==== Optimize path ====
-        #=======================
+        ## ===================================================
+        ## ======= Optimize path  for stop status ============
+        ## ===================================================
         self.optimize_path(self.reference_path, self.ego_pose, obj_pose, self.left_bound, self.right_bound)
 
     def optimize_path(self, reference_path, ego_pose, object_pose, left_bound, right_bound):
@@ -249,12 +249,16 @@ class CrankDrigingPlanner(Node):
                                             0,
                                             0,
                                             ])
+
+        ## Predict new trajectory
         u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, goal_pose, object_pose, left_bound, right_bound)
-        offset = 0.2
+
+
         #for idx in range(len(predicted_traj)):
         #    output_traj.points[nearest_idx - idx].pose.position.x = predicted_traj[idx][0]
         #    output_traj.points[nearest_idx - idx].pose.position.y = predicted_traj[idx][1]
             #print(np.linalg.norm(reference_path_array[idx, 0:2] - reference_path_array[idx - 1, 0:2]))
+
 
         ## Path Optimize ##
         self.before_exec_time = self.get_clock().now().nanoseconds
