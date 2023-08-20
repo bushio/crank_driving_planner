@@ -59,7 +59,7 @@ class CrankDrigingPlanner(Node):
 
         self.vehicle_state = "drive"
         self.before_exec_time = -9999 * NANO_SECONDS
-        self.duration = 10.0
+        self.duration = 100.0
 
         ## Check stop time
         self.stop_time = 0.0
@@ -81,6 +81,7 @@ class CrankDrigingPlanner(Node):
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
+        self.min_diff_for_update = 0.1 **3
 
 
     ## Check if input data is initialized. ##
@@ -117,7 +118,7 @@ class CrankDrigingPlanner(Node):
         else:
             self.stop_time += 0.1
 
-        if self.stop_time > self.stop_duration:
+        if self.stop_time > self.stop_duration and self.vehicle_state == "drive":
             self.vehicle_state = "stop"
 
     ## Callback function for accrel subscriber ##
@@ -206,7 +207,7 @@ class CrankDrigingPlanner(Node):
             waite_time = (self.get_clock().now().nanoseconds - self.before_exec_time) * (NANO_SECONDS)
             if waite_time < self.duration:
                 self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
-                return 
+
             else:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
@@ -215,63 +216,85 @@ class CrankDrigingPlanner(Node):
         ## ===================================================
         ## ======= Optimize path  for stop status ============
         ## ===================================================
-        self.optimize_path(self.reference_path, self.ego_pose, obj_pose, self.left_bound, self.right_bound)
+        self.optimize_path(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
 
-    def optimize_path(self, reference_path, ego_pose, object_pose, left_bound, right_bound):
+        return 
+    ## Optimize Path for avoidance
+    def optimize_path(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
         new_path = reference_path
 
         # Get the nearest path point.
         reference_path_array = ConvertPath2Array(new_path)
-        ego_pose_array = ConvertPoint2List(ego_pose)
         dist = reference_path_array[: , 0:2] - ego_pose_array[0:2]
         nearest_idx = np.argmin(dist, axis=0)[0]
 
         ## If vehicle is not stopped, publish reference path ##
         points = new_path.points
         self.get_logger().info("Publish optimized path")
-        self.get_logger().info("Points num {}".format(len(points)))
-        self.get_logger().info("Nearest idx {}".format(nearest_idx))
-        
-        ## Generate trajectory
-        output_traj = Trajectory()
-        output_traj.points = convertPathToTrajectoryPoints(self.reference_path)
-        output_traj.header = new_path.header
 
         # Set goal pose
-        goal_pose_offset = 10
-        goal_pose = [output_traj.points[nearest_idx - goal_pose_offset].pose.position.x,
-                     output_traj.points[nearest_idx - goal_pose_offset].pose.position.y]
+        if self.vehicle_state != "planning":
+            self.predicted_goal_pose = (self.left_bound[self.current_path_index+1][0:2] + self.right_bound[self.current_path_index+1][0:2]) /2
 
         ## Set ego_pose_predicted [x value, y value, yaw, vel, yaw vel]
-        self.ego_pose_predicted = np.array([ego_pose_array[0],
-                                            ego_pose_array[1], 
-                                            ego_pose_array[2],
-                                            0,
-                                            0,
-                                            ])
+        if self.ego_pose_predicted is None:
+            self.get_logger().info("Initialize the ego pose {}".format(np.rad2deg(ego_pose_array)))
+            self.ego_pose_predicted = np.array([ego_pose_array[0],
+                                                ego_pose_array[1], 
+                                                ego_pose_array[2],
+                                                0.0,
+                                                0.0,
+                                                ])
+        elif (abs(self.ego_pose_predicted[0] -ego_pose_array[0])< self.min_diff_for_update) or \
+            (abs(self.ego_pose_predicted[1] - ego_pose_array[1])  < self.min_diff_for_update):
+            self.get_logger().info("The ego pose has not updated yet...")
+            return 
+        else:
+            self.get_logger().info("Update the ego pose {}".format(ego_pose_array))
+            self.get_logger().info("goal pose {}".format(self.predicted_goal_pose))
+            self.ego_pose_predicted[0] = ego_pose_array[0]
+            self.ego_pose_predicted[1] = ego_pose_array[1]
+            self.ego_pose_predicted[2] = ego_pose_array[2]
 
         ## Predict new trajectory
-        u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, goal_pose, object_pose, left_bound, right_bound)
+        self.get_logger().info("Predict ego_pose {}".format(self.ego_pose_predicted))
+        u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, 
+                                                         self.predicted_goal_pose, 
+                                                         object_pose, 
+                                                         left_bound[self.current_path_index: self.current_path_index + 2], 
+                                                         right_bound[self.current_path_index: self.current_path_index + 2])
 
+        if len(predicted_traj) == 0:
+            return
 
-        #for idx in range(len(predicted_traj)):
-        #    output_traj.points[nearest_idx - idx].pose.position.x = predicted_traj[idx][0]
-        #    output_traj.points[nearest_idx - idx].pose.position.y = predicted_traj[idx][1]
+        self.ego_pose_predicted[3] = u[0]
+        self.ego_pose_predicted[4] = u[1]
+
+        ## Generate trajectory
+        output_traj = Trajectory()
+        output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj))
+        output_traj.header = new_path.header
+
+        for idx in reversed(range(len(predicted_traj))):
+            output_traj.points[idx].pose.position.x = predicted_traj[idx][0]
+            output_traj.points[idx].pose.position.y = predicted_traj[idx][1]
+            output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
+            output_traj.points[idx].longitudinal_velocity_mps = 1.0
             #print(np.linalg.norm(reference_path_array[idx, 0:2] - reference_path_array[idx - 1, 0:2]))
 
 
         ## Path Optimize ##
-        self.before_exec_time = self.get_clock().now().nanoseconds
-        self.vehicle_state = "planning"
+        if self.vehicle_state != "planning":
+            self.before_exec_time = self.get_clock().now().nanoseconds
+            self.vehicle_state = "planning"
 
         if self.animation_flag:
-            self.get_logger().info("Nearest points {}".format(output_traj.points[nearest_idx - goal_pose_offset].pose.position))
-            self.get_logger().info("goal pose {}".format(goal_pose))
-            self.predicted_goal_pose = goal_pose
+            #self.get_logger().info("Nearest points {}".format(output_traj.points[nearest_idx - goal_pose_offset].pose.position))
+            self.get_logger().info("predicted trajectory points {}".format(len(predicted_traj)))
             self.predicted_trajectory = predicted_traj
         
         ## Publish traj
-        #self.pub_traj_.publish(output_traj)
+        self.pub_traj_.publish(output_traj)
         #self.pub_path_.publish(new_path)
 
 def main(args=None):

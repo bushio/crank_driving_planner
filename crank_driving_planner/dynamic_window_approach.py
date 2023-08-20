@@ -91,13 +91,17 @@ class DynamicWindowApproach:
                 ## Calculate cost
                 to_goal_cost = self.to_goal_cost_gain * self._calc_target_heading_cost(trajectory[-1], goal)
                 speed_cost = self.speed_cost_gain * (self.max_speed - trajectory[-1, 3])
-                ob_cost = self.obstacle_cost_gain * self._calc_obstacle_cost(
+
+                ob_cost, tp_idx_obj = self._calc_obstacle_cost(
                     trajectory, ob, dist_threshold=self.ob_dist_threshold, penalty=self.ob_penalty)
                 
-                path_cost = self.path_cost_gain * self._calc_path_cost(
+                path_cost, tp_idx_path = self._calc_path_cost(
                         trajectory, left_bound, right_bound, dist_threshold=self.path_dist_threshold, penalty=self.path_penalty)
 
-                final_cost = to_goal_cost + speed_cost + ob_cost + path_cost
+                tp_idx = min(tp_idx_obj, tp_idx_path)
+                trajectory = trajectory[:tp_idx]
+
+                final_cost = to_goal_cost + speed_cost + self.obstacle_cost_gain * ob_cost + self.path_cost_gain * path_cost
 
                 # search minimum trajectory
                 if min_cost >= final_cost:
@@ -111,6 +115,7 @@ class DynamicWindowApproach:
                         # best omega=0 rad/s (heading to the goal with
                         # angle difference of 0)
                         best_u[1] = -self.max_delta_yaw_rate
+        print(min_cost)
         return best_u, best_trajectory
     
     
@@ -164,7 +169,7 @@ class DynamicWindowApproach:
             penalty = float("Inf")
        
         ## Distance between object and trajectory points
-        for tp in trajectory:
+        for idx, tp in enumerate(trajectory):
             ox = objects[:, 0]
             oy = objects[:, 1]
             dx = tp[0] - ox
@@ -185,12 +190,13 @@ class DynamicWindowApproach:
             object_xy_collision = object_xy[collision_mask, :]
             check = object_xy_collision.any()
             if check:
-                return penalty
+                return penalty, idx
+            
         return 1.0 / min_dist  # OK
         
 
     def _calc_path_cost(self, trajectory, left_bound, right_bound, path_point_size=0.1, dist_threshold=5.0, penalty=-1):
-        
+
         left_bound_vec = np.diff(left_bound, axis=0)
         right_bound_vec = np.diff(right_bound, axis=0)
 
@@ -208,12 +214,7 @@ class DynamicWindowApproach:
             left_check = np.cross(left_bound_vec, tp_vec_left[:len(left_bound_vec), 0:2])
             right_check = np.cross(right_bound_vec, tp_vec_right[:len(right_bound_vec), 0:2])
             
-            ## If any points is beyond left_bound.
-            if np.any(left_check > 0):
-                return penalty
-            if np.any(right_check < 0):
-                return penalty
-            
+
             ## Calc distance between trajectory_pose and lef_bound using traiangle area 
             for ii, v in enumerate(left_bound_vec):
                 traiangle_bottom = np.hypot(v[0], v[1])
@@ -223,7 +224,7 @@ class DynamicWindowApproach:
                 dist = (triangle_area * 2) / traiangle_bottom
                 if min_dist > dist:
                     min_dist = dist
-
+                    
             ## Calc distance between trajectory_pose and right_bound using traiangle area 
             for ii, v in enumerate(right_bound_vec):
                 traiangle_bottom = np.hypot(v[0], v[1])
@@ -234,8 +235,15 @@ class DynamicWindowApproach:
                 
                 if min_dist > dist:
                     min_dist = dist
+
+             ## If any points is beyond left_bound.
+            if np.any(left_check > 0):
+                return min_dist, idx
             
-        return 1.0 / min_dist  # OK
+            if np.any(right_check < 0):
+                return min_dist, idx
+            
+        return 1.0 / min_dist, len(trajectory)  # OK
     
 
     def _calcTriangleArea(self, x1, y1, x2, y2, x3, y3):

@@ -1,6 +1,6 @@
 
 from autoware_auto_planning_msgs.msg import Trajectory, Path, TrajectoryPoint
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Quaternion
 import math
 import numpy as np
 
@@ -74,9 +74,9 @@ def getYawFromQuaternion(orientation):
     return np.arctan2(siny_cosp, cosy_cosp)
 
 
-def convertPathToTrajectoryPoints(path: Path):
+def convertPathToTrajectoryPoints(path: Path, point_num: int):
     tps = []
-    for idx in reversed(range(len(path.points))):
+    for idx in reversed(range(point_num)):
         p = path.points[idx]
         tp = TrajectoryPoint()
         tp.pose = p.pose
@@ -85,19 +85,18 @@ def convertPathToTrajectoryPoints(path: Path):
         tps.append(tp)
     return tps
 
-#
-"""
-inline TrajectoryPoints convertPathToTrajectoryPoints(const PathWithLaneId & path)
-{
-  TrajectoryPoints tps;
-  for (const auto & p : path.points) {
-    TrajectoryPoint tp;
-    tp.pose = p.point.pose;
-    tp.longitudinal_velocity_mps = p.point.longitudinal_velocity_mps;
-    // since path point doesn't have acc for now
-    tp.acceleration_mps2 = 0;
-    tps.emplace_back(tp);
-  }
-  return tps;
-}
-"""
+def getQuaternionFromEuler(roll: float =0, pitch :float =0 ,yaw :float =0) -> Quaternion:
+    q = Quaternion()
+    cy = math.cos(yaw * 0.5)
+    sy = math.sin(yaw * 0.5)
+    cp = math.cos(pitch * 0.5)
+    sp = math.sin(pitch * 0.5)
+    cr = math.cos(roll * 0.5)
+    sr = math.sin(roll * 0.5)
+
+    q.w = cy * cp * cr + sy * sp * sr
+    q.x = cy * cp * sr - sy * sp * cr
+    q.y = sy * cp * sr + cy * sp * cr
+    q.z = sy * cp * cr - cy * sp * sr
+
+    return q
