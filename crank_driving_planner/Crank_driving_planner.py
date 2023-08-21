@@ -67,8 +67,7 @@ class CrankDrigingPlanner(Node):
 
         self.current_path_index = None
         self.next_path_index = None
-        self.path_search_range = 3
-        self.change_next_path = 3.0 #[m]
+        self.next_path_threshold = 5.0
 
         self.animation_flag = True
         self.debug = False
@@ -142,12 +141,17 @@ class CrankDrigingPlanner(Node):
 
 
         ## Set vehicle status
-        if self.vehicle_state == "drive" or self.vehicle_state == "long_stop":
+        if self.vehicle_state == "drive" or self.vehicle_state == "initial":
             if self.crrent_vel_x > 0:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
             else:
                 self.stop_time += 0.1
+
+        if self.vehicle_state == "long_stop":
+            if self.crrent_vel_x > 0:
+                self.vehicle_state = "drive"
+                self.stop_time = 0.0
 
         if self.stop_time > self.stop_duration and self.vehicle_state == "drive":
             self.vehicle_state = "long_stop"
@@ -184,8 +188,8 @@ class CrankDrigingPlanner(Node):
                                         )
         
         ## Check path angle
-        if self.next_path_index < len(self.left_bound)\
-            and self.next_path_index < len(self.left_bound) :
+        if self.next_path_index + 1 < len(self.left_bound)\
+            and self.next_path_index + 1 < len(self.left_bound) :
             next_left_path = calcDistancePoits(self.left_bound[self.next_path_index],
                                                 ego_pose_array)
 
