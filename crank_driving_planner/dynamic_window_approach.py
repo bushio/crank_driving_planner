@@ -192,7 +192,7 @@ class DynamicWindowApproach:
             if check:
                 return penalty, idx
             
-        return 1.0 / min_dist  # OK
+        return 1.0 / min_dist, len(trajectory) # OK
         
 
     def _calc_path_cost(self, trajectory, left_bound, right_bound, path_point_size=0.1, dist_threshold=5.0, penalty=-1):
