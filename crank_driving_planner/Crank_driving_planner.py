@@ -59,7 +59,7 @@ class CrankDrigingPlanner(Node):
 
         self.vehicle_state = "drive"
         self.before_exec_time = -9999 * NANO_SECONDS
-        self.duration = 100.0
+        self.duration = 15.0
 
         ## Check stop time
         self.stop_time = 0.0
@@ -191,6 +191,30 @@ class CrankDrigingPlanner(Node):
                                         predicted_trajectory=self.predicted_trajectory
                                         )
         
+        ## Check path angle
+        if self.current_path_index < len(self.left_bound) and self.current_path_index > 0 \
+            and self.current_path_index < len(self.left_bound) and self.current_path_index > 0 :
+
+            left_bound_1 = self.left_bound[self.current_path_index - 1] - self.left_bound[self.current_path_index]
+            left_bound_2 = self.left_bound[self.current_path_index + 1] - self.left_bound[self.current_path_index]
+            left_bound_1_length = np.hypot(left_bound_1[0], left_bound_1[1])
+            left_bound_2_length = np.hypot(left_bound_2[0], left_bound_2[1])
+
+            right_bound_1 = self.right_bound[self.current_path_index - 1] - self.right_bound[self.current_path_index]
+            right_bound_2 = self.right_bound[self.current_path_index + 1] - self.right_bound[self.current_path_index]
+
+            right_bound_1_length = np.hypot(right_bound_1[0], right_bound_1[1])
+            right_bound_2_length = np.hypot(right_bound_2[0], right_bound_2[1])
+
+            cos_left = np.dot(left_bound_1, left_bound_2) / (left_bound_1_length * left_bound_2_length)
+            cos_right = np.dot(right_bound_1, right_bound_2) / (right_bound_1_length * right_bound_2_length)
+            self.get_logger().info("Left bound cos {}".format(cos_left))
+            self.get_logger().info("right bound cos {}".format(cos_right))
+
+            if cos_left > -0.5 or cos_right > -0.5:
+                self.vehicle_state = "S-crank"
+
+
         ## If the vehicke is driving, not execute optimize. ##
         if self.vehicle_state == "drive":
             self.get_logger().info("Publish reference path")
