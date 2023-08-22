@@ -90,6 +90,7 @@ class CrankDrigingPlanner(Node):
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
+        self.max_traj_dist = 20.0
         
         self.min_diff_for_update = 0.1 **3
 
@@ -99,6 +100,8 @@ class CrankDrigingPlanner(Node):
         self.curve_beta = 10.0 / 180 
         self.curve_mergin = 5.0
         self.curve_vel = 0.5
+        self.beta_1 = 1.0
+        self.beta_2 = 1.5
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -345,9 +348,9 @@ class CrankDrigingPlanner(Node):
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
             if d_rad < math.pi * 0.5:
-                yaw += d_rad
+                yaw += d_rad * self.beta_1
             else:
-                yaw -= d_rad
+                yaw -= d_rad * self.beta_2
             new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
             rad += d_rad
 
