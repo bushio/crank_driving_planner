@@ -69,7 +69,7 @@ class CrankDrigingPlanner(Node):
 
         self.current_path_index = None
         self.next_path_index = None
-        self.next_path_threshold = 3.0
+        self.next_path_threshold = 5.0
 
         self.animation_flag = True
         self.debug = False
@@ -299,25 +299,36 @@ class CrankDrigingPlanner(Node):
 
         shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[self.next_path_index]
         shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[self.next_path_index + 1]
+        
+        ## Calculate curve start point
+        curve_mergin = 2.0
+        dt = 0.0
+        for idx in range(nearest_cuurent_point_idx - 1, 0):
+            dt += calcDistancePoits(reference_path_array[idx + 1][0:2], reference_path_array[idx][0:2])
+            if dt > curve_mergin:
+                curve_start_idx = idx
+                break
+        curve_end_idx = nearest_next_point_idx
+
+        ## Calculate new path on curve
         rad = 0
-        d_rad =  (math.pi * 1/2) / abs(middle_point_idx - nearest_cuurent_point_idx)
+        d_rad =  (math.pi * 1/2) / abs(middle_point_idx - curve_start_idx )
         alpha = 0.8
-        for idx in range(nearest_cuurent_point_idx, middle_point_idx):
+        for idx in range(curve_start_idx , middle_point_idx):
             reference_path_array[idx][0:2] += shift_first * alpha * np.sin(rad)
             rad += d_rad
 
-        connect_vec = reference_path_array[nearest_next_point_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
-        connect_vec = connect_vec[0:2] / (nearest_next_point_idx - middle_point_idx)
-        #rad = 0
-        #d_rad =  (math.pi * 1/2) / abs(nearest_next_point_idx - middle_point_idx)
-        for idx in range(middle_point_idx, nearest_next_point_idx):
+        ## Connect new path and reference path
+        connect_vec = reference_path_array[curve_end_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
+        connect_vec = connect_vec[0:2] / (curve_end_idx - middle_point_idx)
+        for idx in range(middle_point_idx, curve_end_idx):
             reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
    
-        self.predicted_goal_pose = reference_path_array[nearest_next_point_idx][0:2]
+        self.predicted_goal_pose = reference_path_array[curve_end_idx][0:2]
         
-        #if calcDistancePoits(reference_path_array[nearest_next_point_idx , 0:2], ego_pose_array[0:2]) < arrival_threthold:
+        ## Publish new path
         self.vehicle_state = "crank_planning"
-        self.curve_plot = reference_path_array[nearest_cuurent_point_idx:nearest_next_point_idx + 1]
+        self.curve_plot = reference_path_array[curve_start_idx:curve_end_idx + 1]
         self.pub_path_.publish(new_path)
 
     ## Optimize Path for avoidance
