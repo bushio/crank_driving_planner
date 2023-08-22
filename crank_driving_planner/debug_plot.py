@@ -29,7 +29,8 @@ class PlotMarker():
                     index_max=None,
                     rotation = False,
                     predicted_goal_pose=None,
-                    predicted_trajectory=None
+                    predicted_trajectory=None,
+                    curve_plot=None
                     ):
         
         if ego_pose is not None:
@@ -122,6 +123,10 @@ class PlotMarker():
             if predicted_trajectory is not None:
                 self.plot_traj(predicted_trajectory)
 
+            ## Plot curve path
+            if curve_plot is not None:
+                self.plot_red_line(curve_plot)
+
             plt.xlim(plot_xmin, plot_xmax)
             plt.ylim(plot_ymin, plot_ymax)
             plt.pause(0.01)
@@ -129,6 +134,9 @@ class PlotMarker():
 
         else:
             return 
+
+    def plot_red_line(self, line):
+        plt.plot(line[:, 0], line[:, 1], color="red")
 
     def plot_path(self, path):
         plt.plot(path[:, 0], path[:, 1], color="yellow", marker=".")

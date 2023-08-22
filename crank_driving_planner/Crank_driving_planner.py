@@ -56,6 +56,7 @@ class CrankDrigingPlanner(Node):
         self.dynamic_objects = None
         self.left_bound  = None
         self.right_bound  = None
+        self.curve_plot = None
 
         self.vehicle_state = "initial"
         self.before_exec_time = -9999 * NANO_SECONDS
@@ -185,7 +186,8 @@ class CrankDrigingPlanner(Node):
                                         index_max=self.current_path_index + 1,
                                         path=reference_path_array,
                                         predicted_goal_pose=self.predicted_goal_pose,
-                                        predicted_trajectory=self.predicted_trajectory
+                                        predicted_trajectory=self.predicted_trajectory,
+                                        curve_plot=self.curve_plot
                                         )
         
         ## Check path angle
@@ -215,14 +217,12 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("right bound cos {}".format(cos_right))
 
                 if self.vehicle_state == "drive":
-                    if cos_left > -0.5 and cos_left < 0.5:
+                    if (cos_left > -0.75 and cos_left < -0.2) or (cos_left > 0.2 and cos_left < 0.75):
                         self.vehicle_state = "S-crank-left"
-                    elif cos_right > -0.5 and cos_right < 0.5:
+                    elif (cos_right > -0.75 and cos_right < -0.2) or (cos_right > 0.2 and cos_right < 0.75):
                         self.vehicle_state = "S-crank-right"
 
         ## Print vehicle status
-        if self.debug:
-            self.get_logger().info("Get path. Processing crank driving planner...")
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
 
 
@@ -288,7 +288,7 @@ class CrankDrigingPlanner(Node):
         self.get_logger().info("Current_ponint_index :{} ,Next point index {}".format(nearest_cuurent_point_idx,
                                                                                       nearest_next_point_idx
                                                                                       ))
-
+        self.curve_plot = reference_path_array[nearest_cuurent_point_idx:nearest_next_point_idx + 1]
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
