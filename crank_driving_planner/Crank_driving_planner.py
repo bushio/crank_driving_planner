@@ -46,7 +46,6 @@ class CrankDrigingPlanner(Node):
         # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
         #self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
         self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
-        print(time)
 
         # Initialize input ##
         self.reference_path = None
@@ -57,25 +56,35 @@ class CrankDrigingPlanner(Node):
         self.dynamic_objects = None
         self.left_bound  = None
         self.right_bound  = None
-        self.curve_plot = None
+        
+        self.current_path_index = None
+        self.next_path_index = None
+
+
 
         self.vehicle_state = "initial"
         self.before_exec_time = -9999 * NANO_SECONDS
         self.duration = 10.0
 
+        self.planning_traj_pub = None
+        self.planning_path_pub = None
+
+
         ## Check stop time
         self.stop_time = 0.0
         self.stop_duration = 75
 
-        self.current_path_index = None
-        self.next_path_index = None
+
+
         self.next_path_threshold = 5.0
+        self.goal_thresold = 15.0
 
         self.animation_flag = True
         self.debug = False
         
         if self.animation_flag:
             self.plot_marker = PlotMarker()
+            self.curve_plot = None
 
         ## Dynamic Window Approach
         self.dwa_config = Config()
@@ -83,8 +92,12 @@ class CrankDrigingPlanner(Node):
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
+        
         self.min_diff_for_update = 0.1 **3
 
+        ## S-crank
+        self.arrival_threthold = 5.0
+        self.curve_alpha = 0.5
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -257,14 +270,21 @@ class CrankDrigingPlanner(Node):
             if waite_time < self.duration:
                 self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
                 self.optimize_path_for_avoidance(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
+                return
             else:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
                 return
+            
         elif self.vehicle_state == "crank_planning":
-            arrival_threthold = 0.2
             d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
             self.get_logger().info("Distance between ego pose and goal {}".format(d))
+            if d < self.arrival_threthold:
+                self.vehicle_state = "drive"
+                return
+            else:
+                self.pub_path_.publish(self.planning_path_pub)
+                return
         else:
             return 
 
@@ -303,7 +323,7 @@ class CrankDrigingPlanner(Node):
         ## Calculate curve start point
         curve_mergin = 2.0
         dt = 0.0
-        for idx in range(nearest_cuurent_point_idx - 1, 0):
+        for idx in reversed(range(nearest_cuurent_point_idx - 1)):
             dt += calcDistancePoits(reference_path_array[idx + 1][0:2], reference_path_array[idx][0:2])
             if dt > curve_mergin:
                 curve_start_idx = idx
@@ -313,9 +333,11 @@ class CrankDrigingPlanner(Node):
         ## Calculate new path on curve
         rad = 0
         d_rad =  (math.pi * 1/2) / abs(middle_point_idx - curve_start_idx )
-        alpha = 0.8
         for idx in range(curve_start_idx , middle_point_idx):
-            reference_path_array[idx][0:2] += shift_first * alpha * np.sin(rad)
+            reference_path_array[idx][0:2] += shift_first * self.curve_alpha * np.sin(rad)
+            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
+            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
+            new_path.points[idx].longitudinal_velocity_mps = 0.3
             rad += d_rad
 
         ## Connect new path and reference path
@@ -323,13 +345,24 @@ class CrankDrigingPlanner(Node):
         connect_vec = connect_vec[0:2] / (curve_end_idx - middle_point_idx)
         for idx in range(middle_point_idx, curve_end_idx):
             reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
+            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
+            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
+            new_path.points[idx].longitudinal_velocity_mps = 0.3
    
         self.predicted_goal_pose = reference_path_array[curve_end_idx][0:2]
         
-        ## Publish new path
-        self.vehicle_state = "crank_planning"
-        self.curve_plot = reference_path_array[curve_start_idx:curve_end_idx + 1]
-        self.pub_path_.publish(new_path)
+        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_end_idx][0:2])
+        if goal_distance > self.goal_thresold:
+            self.vehicle_state = "drive"
+            self.pub_path_.publish(reference_path)
+        else:
+            ## Publish new path
+            self.vehicle_state = "crank_planning"
+            self.curve_plot = reference_path_array[curve_start_idx:curve_end_idx + 1]
+            
+            self.planning_path_pub = new_path
+            self.pub_path_.publish(new_path)
+            return 
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
@@ -403,7 +436,7 @@ class CrankDrigingPlanner(Node):
             if point_dist > threshold:
                 output_traj.points[idx + 1].pose.position.x = predicted_traj[idx][0]
                 output_traj.points[idx + 1].pose.position.y = predicted_traj[idx][1]
-                #output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
+                output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
                 output_traj.points[idx + 1].longitudinal_velocity_mps = 0.5
                 point_dist = 0.0
             else:
@@ -425,6 +458,7 @@ class CrankDrigingPlanner(Node):
             self.predicted_trajectory = predicted_traj
         
         ## Publish traj
+        self.planning_traj_pub = self.output_traj
         self.pub_traj_.publish(self.output_traj)
 
 def main(args=None):

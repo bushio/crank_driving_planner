@@ -31,7 +31,7 @@ class Config:
         self.max_speed = 3.0  # [m/s]
         self.min_speed = -1.0  # [m/s]
         self.max_yaw_rate = 35.0 * math.pi / 180.0  # [rad/s]
-        self.max_accel = 3.0 # [m/ss]
+        self.max_accel = 1.0 # [m/ss]
         self.max_delta_yaw_rate = 35.0 * math.pi / 180.0  # [rad/ss]
         self.dt = 0.25  # [s] Time tick for motion prediction
         
