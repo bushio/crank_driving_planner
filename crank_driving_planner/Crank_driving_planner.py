@@ -260,12 +260,16 @@ class CrankDrigingPlanner(Node):
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
                 return
+        elif self.vehicle_state == "crank_planning":
+            d = calcDistancePoits(self.predicted_goal_pose, ego_pose_array)
+            self.get_logger().info("Distance between ego pose and goal {}".format(d))
         else:
             return 
 
 
     def optimize_path_for_crank(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
         self.get_logger().info("Calc for {}".format(self.vehicle_state))
+        new_path = reference_path
         reference_path_array = ConvertPath2Array(reference_path)
         
         if self.vehicle_state == "S-crank-right":
@@ -276,10 +280,10 @@ class CrankDrigingPlanner(Node):
             self.get_logger().error("This optimizer can'nt be used for {}".format(self.vehicle_state))
             
 
-        dist_bound_point_current = reference_path_array[: , 0:2] - self.right_bound[self.next_path_index]
+        dist_bound_point_current = reference_path_array[: , 0:2] - target_bound[self.next_path_index]
         dist_bound_point_current = np.hypot(dist_bound_point_current[:, 0], dist_bound_point_current[:, 1])
 
-        dist_bound_point_next= reference_path_array[: , 0:2] - self.right_bound[self.next_path_index + 1]
+        dist_bound_point_next= reference_path_array[: , 0:2] - target_bound[self.next_path_index + 1]
         dist_bound_point_next = np.hypot(dist_bound_point_next[:, 0], dist_bound_point_next[:, 1])
 
         nearest_cuurent_point_idx = dist_bound_point_current.argmin()
@@ -288,7 +292,27 @@ class CrankDrigingPlanner(Node):
         self.get_logger().info("Current_ponint_index :{} ,Next point index {}".format(nearest_cuurent_point_idx,
                                                                                       nearest_next_point_idx
                                                                                       ))
+        
+        middle_point_idx = int((nearest_cuurent_point_idx + nearest_next_point_idx) / 2 )
+
+        shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[self.next_path_index]
+        shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[self.next_path_index + 1]
+        for idx in range(nearest_cuurent_point_idx, middle_point_idx):
+            reference_path_array[idx][0:2] += shift_first * 0.5
+
+        for idx in range(middle_point_idx, nearest_next_point_idx):
+            reference_path_array[idx][0:2] += shift_second * 0.5
+
+        self.predicted_goal_pose = \
+            (self.left_bound[self.next_path_index + 1][0:2] + self.right_bound[self.next_path_index +1][0:2]) /2
+        
+        arrival_threthold = 0.2
+        #if calcDistancePoits(reference_path_array[nearest_next_point_idx , 0:2], ego_pose_array[0:2]) < arrival_threthold:
+        self.vehicle_state = "crank_planning"
+
+
         self.curve_plot = reference_path_array[nearest_cuurent_point_idx:nearest_next_point_idx + 1]
+        self.pub_path_.publish(new_path)
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
