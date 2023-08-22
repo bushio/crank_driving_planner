@@ -72,8 +72,7 @@ class CrankDrigingPlanner(Node):
 
         ## Check stop time
         self.stop_time = 0.0
-        self.stop_duration = 75
-
+        self.stop_duration = 7
 
 
         self.next_path_threshold = 5.0
@@ -87,8 +86,10 @@ class CrankDrigingPlanner(Node):
             self.curve_plot = None
 
         ## Dynamic Window Approach
-        self.dwa_config = Config()
-        self.predictor = DynamicWindowApproach(self.dwa_config)
+        self.use_dwa = False
+        if self.use_dwa:
+            self.dwa_config = Config()
+            self.predictor = DynamicWindowApproach(self.dwa_config)
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
@@ -96,8 +97,10 @@ class CrankDrigingPlanner(Node):
         self.min_diff_for_update = 0.1 **3
 
         ## S-crank
-        self.arrival_threthold = 5.0
-        self.curve_alpha = 0.5
+        self.arrival_threthold = 3.0
+        self.curve_alpha = 0.3
+        self.curve_beta = 10.0 / 180 
+        self.curve_mergin = 5.0
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -296,8 +299,10 @@ class CrankDrigingPlanner(Node):
         
         if self.vehicle_state == "S-crank-right":
             target_bound = right_bound
+            curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
             target_bound = left_bound
+            curve_sign = 1
         else:
             self.get_logger().error("This optimizer can'nt be used for {}".format(self.vehicle_state))
             
@@ -316,28 +321,36 @@ class CrankDrigingPlanner(Node):
                                                                                       ))
         
         middle_point_idx = int((nearest_cuurent_point_idx + nearest_next_point_idx) / 2 )
+        quarter_point_idx = int(middle_point_idx / 2)
 
         shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[self.next_path_index]
         shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[self.next_path_index + 1]
         
         ## Calculate curve start point
-        curve_mergin = 2.0
+
         dt = 0.0
+        curve_start_idx  = nearest_cuurent_point_idx
         for idx in reversed(range(nearest_cuurent_point_idx - 1)):
             dt += calcDistancePoits(reference_path_array[idx + 1][0:2], reference_path_array[idx][0:2])
-            if dt > curve_mergin:
+            if dt > self.curve_mergin:
                 curve_start_idx = idx
                 break
         curve_end_idx = nearest_next_point_idx
 
         ## Calculate new path on curve
         rad = 0
-        d_rad =  (math.pi * 1/2) / abs(middle_point_idx - curve_start_idx )
-        for idx in range(curve_start_idx , middle_point_idx):
+        d_rad =  (math.pi) / abs( middle_point_idx - curve_start_idx)
+        yaw = getYawFromQuaternion(new_path.points[curve_start_idx].pose.orientation)
+        for idx in range(curve_start_idx ,  middle_point_idx):
             reference_path_array[idx][0:2] += shift_first * self.curve_alpha * np.sin(rad)
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = 0.3
+            if d_rad < math.pi * 0.5:
+                yaw += d_rad
+            else:
+                yaw -= d_rad
+            new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
             rad += d_rad
 
         ## Connect new path and reference path
@@ -351,7 +364,7 @@ class CrankDrigingPlanner(Node):
    
         self.predicted_goal_pose = reference_path_array[curve_end_idx][0:2]
         
-        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_end_idx][0:2])
+        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_idx][0:2])
         if goal_distance > self.goal_thresold:
             self.vehicle_state = "drive"
             self.pub_path_.publish(reference_path)
@@ -404,46 +417,62 @@ class CrankDrigingPlanner(Node):
             self.ego_pose_predicted[2] = ego_pose_array[2]
 
         ## Predict new trajectory
-        self.get_logger().info("Predict ego_pose {}".format(self.ego_pose_predicted))
-        u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, 
+        if self.use_dwa:
+            self.get_logger().info("Predict ego_pose {}".format(self.ego_pose_predicted))
+            u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, 
                                                          self.predicted_goal_pose, 
                                                          object_pose, 
                                                          left_bound[self.current_path_index: self.current_path_index + 2], 
                                                          right_bound[self.current_path_index: self.current_path_index + 2])
 
-        if len(predicted_traj) == 0:
-            return
+            if len(predicted_traj) == 0:
+                return
 
-        self.ego_pose_predicted[3] = u[0]
-        self.ego_pose_predicted[4] = u[1]
-
-        ## Generate trajectory
-        output_traj = Trajectory()
-        output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj) + 1)
-        output_traj.header = new_path.header
-        output_traj.header.stamp = self.get_clock().now().to_msg()
-
-        point_dist = 0.0
-        calc_point = self.ego_pose_predicted[0:2]
-        threshold = 2.0
-        ignore_point = 0
-        output_traj.points[0].pose.position.x = ego_pose_array[0]
-        output_traj.points[0].pose.position.y = ego_pose_array[1]
-        output_traj.points[0].longitudinal_velocity_mps = 0.5
-        for idx in reversed(range(len(predicted_traj) - 1)):
-            dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point[0:2])
-            point_dist += dt
-            if point_dist > threshold:
+            self.ego_pose_predicted[3] = u[0]
+            self.ego_pose_predicted[4] = u[1]
+            output_traj = Trajectory()
+            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj) + 1)
+            output_traj.header = new_path.header
+            output_traj.header.stamp = self.get_clock().now().to_msg()
+            
+            traj_dist = 0.0
+            point_dist = 0.0
+            calc_point = self.ego_pose_predicted[0:2]
+            threshold = 2.0
+            ignore_point = 0
+            output_traj.points[0].pose.position.x = ego_pose_array[0]
+            output_traj.points[0].pose.position.y = ego_pose_array[1]
+            output_traj.points[0].longitudinal_velocity_mps = 0.5
+            for idx in range(len(predicted_traj) -1):
+                dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point[0:2])
+                point_dist += dt
+                if point_dist > threshold:
+                    break
                 output_traj.points[idx + 1].pose.position.x = predicted_traj[idx][0]
                 output_traj.points[idx + 1].pose.position.y = predicted_traj[idx][1]
                 output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
                 output_traj.points[idx + 1].longitudinal_velocity_mps = 0.5
                 point_dist = 0.0
-            else:
-                ignore_point += 1
+            ignore_point = len(predicted_traj) - idx
+            for _ in range(ignore_point):
+                output_traj.points.pop(-1)
 
-        for k in range(ignore_point):
-            output_traj.points.pop(-1)
+        else:
+            output_traj = Trajectory()
+            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, 10)
+            for idx in range(len(predicted_traj) - 1):
+                dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point[0:2])
+                point_dist += dt
+                if point_dist > threshold:
+                    output_traj.points[idx + 1].pose.position.x = predicted_traj[idx][0]
+                    output_traj.points[idx + 1].pose.position.y = predicted_traj[idx][1]
+                    output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
+                    output_traj.points[idx + 1].longitudinal_velocity_mps = 0.5
+                    point_dist = 0.0
+                else:
+                    ignore_point += 1
+        
+
 
         self.output_traj = output_traj
         self.get_logger().info("Output trajectory points {}".format(len(output_traj.points)))
