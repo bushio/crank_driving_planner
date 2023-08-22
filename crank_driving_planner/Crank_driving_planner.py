@@ -90,18 +90,18 @@ class CrankDrigingPlanner(Node):
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
-        self.max_traj_dist = 20.0
+        self.max_traj_dist = 30.0
         
         self.min_diff_for_update = 0.1 **3
 
         ## S-crank
-        self.arrival_threthold = 3.0
+        self.arrival_threthold = 1.0
         self.curve_alpha = 0.5
         self.curve_beta = 10.0 / 180 
         self.curve_mergin = 5.0
         self.curve_vel = 0.5
         self.beta_1 = 1.0
-        self.beta_2 = 1.5
+        self.beta_2 = 2.0
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -145,7 +145,10 @@ class CrankDrigingPlanner(Node):
         right_diff_x = right_bound[:, 0] - ego_pose[0]
         right_diff_y = right_bound[:, 1] - ego_pose[1]
         right_diff = np.hypot(right_diff_x, right_diff_y)
-        self.current_path_index = min(left_diff.argmin(), right_diff.argmin())
+        self.current_left_path_index = left_diff.argmin()
+        self.current_right_path_index = right_diff.argmin()
+        self.current_path_index = min(self.current_left_path_index,
+                                            self.current_right_path_index)
         self.next_path_index = self.current_path_index + 1 
 
     ## Callback function for path subscriber ##
@@ -175,6 +178,9 @@ class CrankDrigingPlanner(Node):
 
         if self.stop_time > self.stop_duration and self.vehicle_state == "drive":
             self.vehicle_state = "long_stop"
+
+        if self.stop_time > self.stop_duration and (self.vehicle_state == "S-crank-right" or self.vehicle_state == "S-crank-left"):
+            self.vehicle_state = "drive"
 
         ## If find dynamic objects, get object pose
         obj_pose = None
@@ -232,13 +238,19 @@ class CrankDrigingPlanner(Node):
                 cos_left = np.dot(left_bound_1, left_bound_2) / (left_bound_1_length * left_bound_2_length)
                 cos_right = np.dot(right_bound_1, right_bound_2) / (right_bound_1_length * right_bound_2_length)
                 self.get_logger().info("Left bound cos {}".format(cos_left))
-                self.get_logger().info("right bound cos {}".format(cos_right))
+                self.get_logger().info("Right bound cos {}".format(cos_right))
 
                 if self.vehicle_state == "drive":
                     if (cos_left > -0.75 and cos_left < -0.2) or (cos_left > 0.2 and cos_left < 0.75):
-                        self.vehicle_state = "S-crank-left"
+                        if left_bound_1_length > 5:
+                            self.vehicle_state = "S-crank-left"
+                        else:
+                            self.get_logger().info("Left bound length {}".format(left_bound_1_length))
                     elif (cos_right > -0.75 and cos_right < -0.2) or (cos_right > 0.2 and cos_right < 0.75):
-                        self.vehicle_state = "S-crank-right"
+                        if right_bound_1_length > 5:
+                            self.vehicle_state = "S-crank-right"
+                        else:
+                            self.get_logger().info("Right bound length {}".format(right_bound_1_length))
 
         ## Print vehicle status
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
@@ -264,6 +276,7 @@ class CrankDrigingPlanner(Node):
         ## If the vehicke is stopped long time, optimize trajectory ##
         elif self.vehicle_state == "long_stop":
             self.optimize_path_for_avoidance(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
+            self.stop_time = 0.0
             return 
         
         ## If the vehicle is planning, check planning time.##
@@ -283,6 +296,7 @@ class CrankDrigingPlanner(Node):
         elif self.vehicle_state == "crank_planning":
             d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
             self.get_logger().info("Distance between ego pose and goal {}".format(d))
+            self.stop_time = 0.0
             if d < self.arrival_threthold:
                 self.vehicle_state = "drive"
                 return
@@ -435,8 +449,7 @@ class CrankDrigingPlanner(Node):
             output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj) + 1)
             output_traj.header = new_path.header
             output_traj.header.stamp = self.get_clock().now().to_msg()
-            
-            
+
             point_dist = 0.0
             calc_point = self.ego_pose_predicted[0:2]
             threshold = 2.0
@@ -459,20 +472,27 @@ class CrankDrigingPlanner(Node):
 
             for _ in range(ignore_point):
                 output_traj.points.pop(-1)
-                
+
+            if self.animation_flag:
+                self.get_logger().info("predicted trajectory points {}".format(len(predicted_traj)))
+                self.predicted_trajectory = predicted_traj
+
         ## Use reference path as trajectory
         else:
             traj_dist = 0.0
             output_traj = Trajectory()
-            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, 10)
+            output_traj.header = new_path.header
+            output_traj.header.stamp = self.get_clock().now().to_msg()
+            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(self.reference_path.points))
             for idx in range(1, len(reference_path_array)):
                 traj_dist  += calcDistancePoits(reference_path_array[idx][0:2], reference_path_array[idx - 1][0:2])
                 if traj_dist > self.max_traj_dist:
                     break
             ignore_point = len(reference_path_array) - idx
             for _ in range(ignore_point):
+                if len(output_traj.points) <= 10:
+                    break
                 output_traj.points.pop(-1)
-        
         
         self.output_traj = output_traj
         self.get_logger().info("Output trajectory points {}".format(len(output_traj.points)))
@@ -482,9 +502,6 @@ class CrankDrigingPlanner(Node):
             self.before_exec_time = self.get_clock().now().nanoseconds
             self.vehicle_state = "long_stop_planning"
 
-        if self.animation_flag:
-            self.get_logger().info("predicted trajectory points {}".format(len(predicted_traj)))
-            self.predicted_trajectory = predicted_traj
         
         ## Publish traj
         self.planning_traj_pub = self.output_traj
