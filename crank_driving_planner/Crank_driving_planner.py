@@ -147,6 +147,7 @@ class CrankDrigingPlanner(Node):
                 self.stop_time = 0.0
             else:
                 self.stop_time += 0.1
+                self.get_logger().info("Stop time {}".format(self.stop_time))
 
         if self.vehicle_state == "long_stop":
             if self.crrent_vel_x > 0:
@@ -189,7 +190,7 @@ class CrankDrigingPlanner(Node):
         
         ## Check path angle
         if self.next_path_index + 1 < len(self.left_bound)\
-            and self.next_path_index + 1 < len(self.left_bound) :
+            and self.next_path_index + 1 < len(self.right_bound) :
             next_left_path = calcDistancePoits(self.left_bound[self.next_path_index],
                                                 ego_pose_array)
 
