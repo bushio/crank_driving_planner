@@ -56,9 +56,8 @@ class CrankDrigingPlanner(Node):
         self.dynamic_objects = None
         self.left_bound  = None
         self.right_bound  = None
-        
-        self.current_path_index = None
-        self.next_path_index = None
+        self.current_left_path_index = None
+        self.current_right_path_index = None
 
         self.vehicle_state = "initial"
         self.before_exec_time = -9999 * NANO_SECONDS
@@ -149,7 +148,6 @@ class CrankDrigingPlanner(Node):
         self.current_right_path_index = right_diff.argmin()
         self.current_path_index = min(self.current_left_path_index,
                                             self.current_right_path_index)
-        self.next_path_index = self.current_path_index + 1 
 
     ## Callback function for path subscriber ##
     def onTrigger(self, msg: Path):
@@ -206,8 +204,8 @@ class CrankDrigingPlanner(Node):
                                         object_pose =obj_pose, 
                                         left_bound=self.left_bound,
                                         right_bound=self.right_bound,
-                                        index_min=self.current_path_index,
-                                        index_max=self.current_path_index + 1,
+                                        path_index_left=self.current_left_path_index,
+                                        path_index_right=self.current_right_path_index,
                                         path=reference_path_array,
                                         predicted_goal_pose=self.predicted_goal_pose,
                                         predicted_trajectory=self.predicted_trajectory,
@@ -215,22 +213,22 @@ class CrankDrigingPlanner(Node):
                                         )
         
         ## Check path angle
-        if self.next_path_index + 1 < len(self.left_bound)\
-            and self.next_path_index + 1 < len(self.right_bound) :
-            next_left_path = calcDistancePoits(self.left_bound[self.next_path_index][0:2],
+        if self.current_left_path_index + 2 < len(self.left_bound)\
+            and self.current_right_path_index + 2 < len(self.right_bound) :
+            next_left_path = calcDistancePoits(self.left_bound[self.current_left_path_index + 1][0:2],
                                                 ego_pose_array[0:2])
 
-            next_right_path = calcDistancePoits(self.right_bound[self.next_path_index][0:2],
+            next_right_path = calcDistancePoits(self.right_bound[self.current_right_path_index + 1][0:2],
                                                 ego_pose_array[0:2])
             
             if next_right_path < self.next_path_threshold or next_left_path < self.next_path_threshold:
-                left_bound_1 = self.left_bound[self.next_path_index - 1] - self.left_bound[self.next_path_index]
-                left_bound_2 = self.left_bound[self.next_path_index + 1] - self.left_bound[self.next_path_index]
+                left_bound_1 = self.left_bound[self.current_left_path_index] - self.left_bound[self.current_left_path_index + 1]
+                left_bound_2 = self.left_bound[self.current_left_path_index + 2] - self.left_bound[self.current_left_path_index + 1]
                 left_bound_1_length = np.hypot(left_bound_1[0], left_bound_1[1])
                 left_bound_2_length = np.hypot(left_bound_2[0], left_bound_2[1])
 
-                right_bound_1 = self.right_bound[self.next_path_index - 1] - self.right_bound[self.next_path_index]
-                right_bound_2 = self.right_bound[self.next_path_index + 1] - self.right_bound[self.next_path_index]
+                right_bound_1 = self.right_bound[self.current_right_path_index] - self.right_bound[self.current_right_path_index + 1]
+                right_bound_2 = self.right_bound[self.current_right_path_index + 2] - self.right_bound[self.current_right_path_index + 1]
 
                 right_bound_1_length = np.hypot(right_bound_1[0], right_bound_1[1])
                 right_bound_2_length = np.hypot(right_bound_2[0], right_bound_2[1])
@@ -314,18 +312,20 @@ class CrankDrigingPlanner(Node):
         
         if self.vehicle_state == "S-crank-right":
             target_bound = right_bound
+            next_path_index = self.current_left_path_index + 1
             curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
             target_bound = left_bound
+            next_path_index = self.current_right_path_index + 1
             curve_sign = 1
         else:
             self.get_logger().error("This optimizer can'nt be used for {}".format(self.vehicle_state))
             
 
-        dist_bound_point_current = reference_path_array[: , 0:2] - target_bound[self.next_path_index]
+        dist_bound_point_current = reference_path_array[: , 0:2] - target_bound[next_path_index]
         dist_bound_point_current = np.hypot(dist_bound_point_current[:, 0], dist_bound_point_current[:, 1])
 
-        dist_bound_point_next= reference_path_array[: , 0:2] - target_bound[self.next_path_index + 1]
+        dist_bound_point_next= reference_path_array[: , 0:2] - target_bound[next_path_index + 1]
         dist_bound_point_next = np.hypot(dist_bound_point_next[:, 0], dist_bound_point_next[:, 1])
 
         nearest_cuurent_point_idx = dist_bound_point_current.argmin()
@@ -338,8 +338,8 @@ class CrankDrigingPlanner(Node):
         middle_point_idx = int((nearest_cuurent_point_idx + nearest_next_point_idx) / 2 )
         quarter_point_idx = int(middle_point_idx / 2)
 
-        shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[self.next_path_index]
-        shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[self.next_path_index + 1]
+        shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[next_path_index]
+        shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[next_path_index + 1]
         
         ## Calculate curve start point
 
@@ -408,7 +408,7 @@ class CrankDrigingPlanner(Node):
 
         # Set goal pose
         if self.vehicle_state != "long_stop_planning":
-            self.predicted_goal_pose = (self.left_bound[self.current_path_index+1][0:2] + self.right_bound[self.current_path_index+1][0:2]) /2
+            self.predicted_goal_pose = (self.left_bound[self.current_left_path_index+1][0:2] + self.right_bound[self.current_right_path_index+1][0:2]) /2
 
         ## Set ego_pose_predicted [x value, y value, yaw, vel, yaw vel]
         if self.ego_pose_predicted is None:
@@ -437,8 +437,8 @@ class CrankDrigingPlanner(Node):
             u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, 
                                                          self.predicted_goal_pose, 
                                                          object_pose, 
-                                                         left_bound[self.current_path_index: self.current_path_index + 2], 
-                                                         right_bound[self.current_path_index: self.current_path_index + 2])
+                                                         left_bound[self.current_left_path_index: self.current_left_path_index + 2], 
+                                                         right_bound[self.current_right_path_index: self.current_right_path_index + 2])
 
             if len(predicted_traj) == 0:
                 return

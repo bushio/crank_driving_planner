@@ -24,9 +24,9 @@ class PlotMarker():
                     object_pose = None,
                     left_bound = None,
                     right_bound = None,
-                    index_min= None,
                     path=None,
-                    index_max=None,
+                    path_index_left=None,
+                    path_index_right= None,
                     rotation = False,
                     predicted_goal_pose=None,
                     predicted_trajectory=None,
@@ -111,9 +111,9 @@ class PlotMarker():
                 plt.plot(left_bound[:, 0], left_bound[:, 1], color="black")
                 plt.plot(right_bound[:,0], right_bound[:,1], color="black")
 
-                if (index_min is not None) and (index_max is not None):
-                    plt.plot(left_bound[index_min:index_max + 1 , 0], left_bound[index_min:index_max + 1, 1], color="green")
-                    plt.plot(right_bound[index_min:index_max + 1, 0], right_bound[index_min:index_max + 1, 1], color="green")
+                if (path_index_left is not None) and (path_index_right is not None):
+                    plt.plot(left_bound[path_index_left:path_index_left + 2 , 0], left_bound[path_index_left:path_index_left + 2, 1], color="green")
+                    plt.plot(right_bound[path_index_right:path_index_right+ 2, 0], right_bound[path_index_right:path_index_right+ 2, 1], color="green")
 
             ## Plot goal pose
             if predicted_goal_pose is not None:
