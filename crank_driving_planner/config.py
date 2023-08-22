@@ -41,7 +41,7 @@ class Config:
         self.v_resolution = 0.1  # [m/s]
         
         # Prediction time. The longer this time, the longer trajectory length.
-        self.predict_time = 5.0  # [s]
+        self.predict_time = 3.0  # [s]
         self.to_goal_cost_gain = 0.5
         self.speed_cost_gain = 0.5
         self.obstacle_cost_gain = 10.0

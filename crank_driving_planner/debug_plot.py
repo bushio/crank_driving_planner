@@ -136,7 +136,7 @@ class PlotMarker():
             return 
 
     def plot_red_line(self, line):
-        plt.plot(line[:, 0], line[:, 1], color="red")
+        plt.plot(line[:, 0], line[:, 1], color="Magenta")
 
     def plot_path(self, path):
         plt.plot(path[:, 0], path[:, 1], color="yellow", marker=".")

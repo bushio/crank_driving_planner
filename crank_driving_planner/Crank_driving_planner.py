@@ -46,6 +46,7 @@ class CrankDrigingPlanner(Node):
         # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
         #self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
         self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
+        print(time)
 
         # Initialize input ##
         self.reference_path = None
@@ -68,7 +69,7 @@ class CrankDrigingPlanner(Node):
 
         self.current_path_index = None
         self.next_path_index = None
-        self.next_path_threshold = 5.0
+        self.next_path_threshold = 3.0
 
         self.animation_flag = True
         self.debug = False
@@ -147,7 +148,7 @@ class CrankDrigingPlanner(Node):
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
             else:
-                self.stop_time += 0.1
+                self.stop_time += 0.5
                 self.get_logger().info("Stop time {}".format(self.stop_time))
 
         if self.vehicle_state == "long_stop":
@@ -193,11 +194,11 @@ class CrankDrigingPlanner(Node):
         ## Check path angle
         if self.next_path_index + 1 < len(self.left_bound)\
             and self.next_path_index + 1 < len(self.right_bound) :
-            next_left_path = calcDistancePoits(self.left_bound[self.next_path_index],
-                                                ego_pose_array)
+            next_left_path = calcDistancePoits(self.left_bound[self.next_path_index][0:2],
+                                                ego_pose_array[0:2])
 
-            next_right_path = calcDistancePoits(self.right_bound[self.next_path_index],
-                                                ego_pose_array)
+            next_right_path = calcDistancePoits(self.right_bound[self.next_path_index][0:2],
+                                                ego_pose_array[0:2])
             
             if next_right_path < self.next_path_threshold or next_left_path < self.next_path_threshold:
                 left_bound_1 = self.left_bound[self.next_path_index - 1] - self.left_bound[self.next_path_index]
@@ -261,7 +262,8 @@ class CrankDrigingPlanner(Node):
                 self.stop_time = 0.0
                 return
         elif self.vehicle_state == "crank_planning":
-            d = calcDistancePoits(self.predicted_goal_pose, ego_pose_array)
+            arrival_threthold = 0.2
+            d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
             self.get_logger().info("Distance between ego pose and goal {}".format(d))
         else:
             return 
@@ -297,20 +299,24 @@ class CrankDrigingPlanner(Node):
 
         shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[self.next_path_index]
         shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[self.next_path_index + 1]
+        rad = 0
+        d_rad =  (math.pi * 1/2) / abs(middle_point_idx - nearest_cuurent_point_idx)
+        alpha = 0.8
         for idx in range(nearest_cuurent_point_idx, middle_point_idx):
-            reference_path_array[idx][0:2] += shift_first * 0.5
+            reference_path_array[idx][0:2] += shift_first * alpha * np.sin(rad)
+            rad += d_rad
 
+        connect_vec = reference_path_array[nearest_next_point_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
+        connect_vec = connect_vec[0:2] / (nearest_next_point_idx - middle_point_idx)
+        #rad = 0
+        #d_rad =  (math.pi * 1/2) / abs(nearest_next_point_idx - middle_point_idx)
         for idx in range(middle_point_idx, nearest_next_point_idx):
-            reference_path_array[idx][0:2] += shift_second * 0.5
-
-        self.predicted_goal_pose = \
-            (self.left_bound[self.next_path_index + 1][0:2] + self.right_bound[self.next_path_index +1][0:2]) /2
+            reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
+   
+        self.predicted_goal_pose = reference_path_array[nearest_next_point_idx][0:2]
         
-        arrival_threthold = 0.2
         #if calcDistancePoits(reference_path_array[nearest_next_point_idx , 0:2], ego_pose_array[0:2]) < arrival_threthold:
         self.vehicle_state = "crank_planning"
-
-
         self.curve_plot = reference_path_array[nearest_cuurent_point_idx:nearest_next_point_idx + 1]
         self.pub_path_.publish(new_path)
 
@@ -371,6 +377,8 @@ class CrankDrigingPlanner(Node):
         output_traj = Trajectory()
         output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj) + 1)
         output_traj.header = new_path.header
+        output_traj.header.stamp = self.get_clock().now().to_msg()
+
         point_dist = 0.0
         calc_point = self.ego_pose_predicted[0:2]
         threshold = 2.0
@@ -379,7 +387,7 @@ class CrankDrigingPlanner(Node):
         output_traj.points[0].pose.position.y = ego_pose_array[1]
         output_traj.points[0].longitudinal_velocity_mps = 0.5
         for idx in reversed(range(len(predicted_traj) - 1)):
-            dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point)
+            dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point[0:2])
             point_dist += dt
             if point_dist > threshold:
                 output_traj.points[idx + 1].pose.position.x = predicted_traj[idx][0]

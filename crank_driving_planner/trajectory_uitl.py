@@ -46,8 +46,7 @@ def calcDistancePoits(point_a: list, point_b: list) -> float:
     Calculate distance between point_a and point_b.
     """
     if len(point_a) != len(point_b):
-        print("Shape of the poits must be same.")
-        return 0.0
+        return None
     return np.linalg.norm(np.array(point_a) - np.array(point_b))
 
 
