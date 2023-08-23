@@ -102,7 +102,6 @@ class CrankDrigingPlanner(Node):
         self.curve_backward_mergin = 6.0
 
         self.curve_alpha = 0.5
-        self.curve_beta = 10.0 / 180 
         self.curve_vel = 0.5
         self.beta_1 = 1.0
         self.beta_2 = 5.0
@@ -411,6 +410,7 @@ class CrankDrigingPlanner(Node):
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
+            new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
    
 
         ## Calculate finish curve
@@ -419,7 +419,7 @@ class CrankDrigingPlanner(Node):
         #d_rad =  (math.pi) / abs(middle_point_idx - curve_start_point_idx)
         #yaw = getYawFromQuaternion(new_path.points[curve_start_point_idx].pose.orientation)
         for idx in range(quarter_point_idx,  middle_point_idx):
-            reference_path_array[idx][0:2] += backward_vec_norm
+            reference_path_array[idx][0:2] += backward_vec_norm * 1.5
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
@@ -429,9 +429,9 @@ class CrankDrigingPlanner(Node):
 
         ## smooting path
         min_path_length = 0.001
-        for idx in range(curve_start_point_idx,  curve_end_point_idx):
+        for idx in reversed(range(curve_start_point_idx, curve_end_point_idx)):
             p1 = np.array([new_path.points[idx].pose.position.x, new_path.points[idx].pose.position.y])
-            p2 = np.array([new_path.points[idx - 1].pose.position.x, new_path.points[idx - 1].pose.position.y])
+            p2 = np.array([new_path.points[idx + 1].pose.position.x, new_path.points[idx + 1].pose.position.y])
             dt = calcDistancePoits(p1, p2)
             if dt < min_path_length:
                 del new_path.points[idx]
