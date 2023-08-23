@@ -403,8 +403,6 @@ class CrankDrigingPlanner(Node):
             new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
             rad += d_rad
 
-        
-
         ## Connect new path and reference path
         connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
         connect_vec = connect_vec[0:2] / (curve_end_point_idx - middle_point_idx)
@@ -428,6 +426,16 @@ class CrankDrigingPlanner(Node):
 
         self.predicted_goal_pose = reference_path_array[curve_end_point_idx][0:2]
         
+
+        ## smooting path
+        min_path_length = 0.001
+        for idx in range(curve_start_point_idx,  curve_end_point_idx):
+            p1 = np.array([new_path.points[idx].pose.position.x, new_path.points[idx].pose.position.y])
+            p2 = np.array([new_path.points[idx - 1].pose.position.x, new_path.points[idx - 1].pose.position.y])
+            dt = calcDistancePoits(p1, p2)
+            if dt < min_path_length:
+                del new_path.points[idx]
+
         goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_point_idx][0:2])
         
         #if goal_distance > self.goal_thresold:
