@@ -71,8 +71,8 @@ class CrankDrigingPlanner(Node):
         self.stop_time = 0.0
         self.stop_duration = 7
 
-        self.next_path_threshold = 5.0
-        self.goal_thresold = 15.0
+        
+        
 
         self.animation_flag = True
         self.debug = False
@@ -80,7 +80,8 @@ class CrankDrigingPlanner(Node):
         if self.animation_flag:
             self.plot_marker = PlotMarker()
             self.curve_plot = None
-
+            self.curve_backward_point = None
+            self.curve_forward_point = None
         ## Dynamic Window Approach
         self.use_dwa = False
         if self.use_dwa:
@@ -93,11 +94,15 @@ class CrankDrigingPlanner(Node):
         
         self.min_diff_for_update = 0.1 **3
 
+        self.goal_thresold = 15.0
+        self.next_path_threshold = 10.0
         ## S-crank
         self.arrival_threthold = 1.0
+        self.curve_forward_mergin = 3.0
+        self.curve_backward_mergin = 5.0
+
         self.curve_alpha = 0.5
         self.curve_beta = 10.0 / 180 
-        self.curve_mergin = 5.0
         self.curve_vel = 0.5
         self.beta_1 = 1.0
         self.beta_2 = 2.0
@@ -148,6 +153,24 @@ class CrankDrigingPlanner(Node):
         self.current_right_path_index = right_diff.argmin()
         self.current_path_index = min(self.current_left_path_index,
                                             self.current_right_path_index)
+        
+        self.next_left_path_index = None
+        self.next_right_path_index = None
+        for idx in range(len(left_diff)):
+            if left_diff[idx] > self.next_path_threshold:
+                self.next_left_path_index = idx
+                break
+
+        for idx in range(len(right_diff)):
+            if right_diff[idx] > self.next_path_threshold:
+                self.next_right_path_index = idx
+                break
+
+        if self.next_left_path_index is None or self.next_left_path_index == 0:
+            self.next_left_path_index = self.current_left_path_index + 1
+
+        if self.next_right_path_index is None or self.next_right_path_index == 0:
+            self.next_right_path_index = self.current_right_path_index + 1
 
     ## Callback function for path subscriber ##
     def onTrigger(self, msg: Path):
@@ -205,11 +228,15 @@ class CrankDrigingPlanner(Node):
                                         left_bound=self.left_bound,
                                         right_bound=self.right_bound,
                                         path_index_left=self.current_left_path_index,
+                                        path_index_next_left=self.next_left_path_index,
                                         path_index_right=self.current_right_path_index,
+                                        path_index_next_right=self.next_right_path_index,
                                         path=reference_path_array,
                                         predicted_goal_pose=self.predicted_goal_pose,
                                         predicted_trajectory=self.predicted_trajectory,
-                                        curve_plot=self.curve_plot
+                                        curve_plot=self.curve_plot,
+                                        curve_forward_point=self.curve_forward_point,
+                                        curve_backward_point=self.curve_backward_point,
                                         )
         
         ## Check path angle
@@ -239,12 +266,12 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("Right bound cos {}".format(cos_right))
 
                 if self.vehicle_state == "drive":
-                    if (cos_left > -0.75 and cos_left < -0.2) or (cos_left > 0.2 and cos_left < 0.75):
+                    if(cos_left < 0.2 and cos_left > -0.2):
                         if left_bound_1_length > 5:
                             self.vehicle_state = "S-crank-left"
                         else:
                             self.get_logger().info("Left bound length {}".format(left_bound_1_length))
-                    elif (cos_right > -0.75 and cos_right < -0.2) or (cos_right > 0.2 and cos_right < 0.75):
+                    elif (cos_right < 0.2 and cos_right > -0.2):
                         if right_bound_1_length > 5:
                             self.vehicle_state = "S-crank-right"
                         else:
@@ -306,57 +333,61 @@ class CrankDrigingPlanner(Node):
 
 
     def optimize_path_for_crank(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
-        self.get_logger().info("Calc for {}".format(self.vehicle_state))
+        self.get_logger().info("[S-crank]: Calc for {}".format(self.vehicle_state))
         new_path = reference_path
         reference_path_array = ConvertPath2Array(reference_path)
         
         if self.vehicle_state == "S-crank-right":
             target_bound = right_bound
-            next_path_index = self.current_left_path_index + 1
+            next_path_index = self.current_right_path_index + 1
             curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
             target_bound = left_bound
-            next_path_index = self.current_right_path_index + 1
+            next_path_index = self.current_left_path_index + 1
             curve_sign = 1
         else:
-            self.get_logger().error("This optimizer can'nt be used for {}".format(self.vehicle_state))
+            self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
             
 
-        dist_bound_point_current = reference_path_array[: , 0:2] - target_bound[next_path_index]
-        dist_bound_point_current = np.hypot(dist_bound_point_current[:, 0], dist_bound_point_current[:, 1])
+        forward_vec = target_bound[next_path_index + 1] - target_bound[next_path_index]
+        forward_vec_length = np.hypot(forward_vec[0], forward_vec[1])
+        forward_vec_norm = forward_vec / forward_vec_length 
 
-        dist_bound_point_next= reference_path_array[: , 0:2] - target_bound[next_path_index + 1]
-        dist_bound_point_next = np.hypot(dist_bound_point_next[:, 0], dist_bound_point_next[:, 1])
+        backward_vec = target_bound[next_path_index - 1] - target_bound[next_path_index]
+        backward_veclength = np.hypot(backward_vec[0], backward_vec[1])
+        backward_vec_norm = backward_vec / backward_veclength
 
-        nearest_cuurent_point_idx = dist_bound_point_current.argmin()
-        nearest_next_point_idx = dist_bound_point_next.argmin()
+        curve_forward_point = target_bound[next_path_index] + self.curve_forward_mergin * forward_vec_norm
+        curve_backward_point = target_bound[next_path_index] + self.curve_backward_mergin * backward_vec_norm
         
-        self.get_logger().info("Current_ponint_index :{} ,Next point index {}".format(nearest_cuurent_point_idx,
-                                                                                      nearest_next_point_idx
+        ## For debug
+        self.curve_forward_point = curve_forward_point
+        self.curve_backward_point = curve_backward_point
+
+        dist_to_curve_start = curve_backward_point - reference_path_array[: , 0:2]
+        dist_to_curve_start= np.hypot(dist_to_curve_start[:, 0], dist_to_curve_start[:, 1])
+
+        dist_to_curve_end =  curve_forward_point - reference_path_array[: , 0:2]
+        dist_to_curve_end = np.hypot(dist_to_curve_end[:, 0], dist_to_curve_end[:, 1])
+
+        curve_start_point_idx = dist_to_curve_start.argmin()
+        curve_end_point_idx = dist_to_curve_end.argmin()
+        
+        self.get_logger().info("[S-crank]: Curve start_ponint_index :{} ,Next point index {}".format(curve_start_point_idx,
+                                                                                      curve_end_point_idx
                                                                                       ))
         
-        middle_point_idx = int((nearest_cuurent_point_idx + nearest_next_point_idx) / 2 )
+        middle_point_idx = int((curve_start_point_idx + curve_end_point_idx) / 2 )
         quarter_point_idx = int(middle_point_idx / 2)
 
-        shift_first = reference_path_array[nearest_cuurent_point_idx , 0:2] - target_bound[next_path_index]
-        shift_second = reference_path_array[nearest_next_point_idx , 0:2] - target_bound[next_path_index + 1]
-        
-        ## Calculate curve start point
+        shift_first = curve_backward_point - reference_path_array[curve_start_point_idx , 0:2]
 
-        dt = 0.0
-        curve_start_idx  = nearest_cuurent_point_idx
-        for idx in reversed(range(nearest_cuurent_point_idx - 1)):
-            dt += calcDistancePoits(reference_path_array[idx + 1][0:2], reference_path_array[idx][0:2])
-            if dt > self.curve_mergin:
-                curve_start_idx = idx
-                break
-        curve_end_idx = nearest_next_point_idx
 
         ## Calculate new path on curve
         rad = 0
-        d_rad =  (math.pi) / abs( middle_point_idx - curve_start_idx)
-        yaw = getYawFromQuaternion(new_path.points[curve_start_idx].pose.orientation)
-        for idx in range(curve_start_idx ,  middle_point_idx):
+        d_rad =  (math.pi) / abs( middle_point_idx - curve_start_point_idx)
+        yaw = getYawFromQuaternion(new_path.points[curve_start_point_idx].pose.orientation)
+        for idx in range(curve_start_point_idx ,  middle_point_idx):
             reference_path_array[idx][0:2] += shift_first * self.curve_alpha * np.sin(rad)
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
@@ -369,28 +400,30 @@ class CrankDrigingPlanner(Node):
             rad += d_rad
 
         ## Connect new path and reference path
-        connect_vec = reference_path_array[curve_end_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
-        connect_vec = connect_vec[0:2] / (curve_end_idx - middle_point_idx)
-        for idx in range(middle_point_idx, curve_end_idx):
+        connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
+        connect_vec = connect_vec[0:2] / (curve_end_point_idx - middle_point_idx)
+        for idx in range(middle_point_idx, curve_end_point_idx):
             reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
    
-        self.predicted_goal_pose = reference_path_array[curve_end_idx][0:2]
+        self.predicted_goal_pose = reference_path_array[curve_end_point_idx][0:2]
         
-        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_idx][0:2])
-        if goal_distance > self.goal_thresold:
-            self.vehicle_state = "drive"
-            self.pub_path_.publish(reference_path)
-        else:
-            ## Publish new path
-            self.vehicle_state = "crank_planning"
-            self.curve_plot = reference_path_array[curve_start_idx:curve_end_idx + 1]
-            
-            self.planning_path_pub = new_path
-            self.pub_path_.publish(new_path)
-            return 
+        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_point_idx][0:2])
+        
+        #if goal_distance > self.goal_thresold:
+        #    self.vehicle_state = "drive"
+        #    self.pub_path_.publish(reference_path)
+        #else:
+
+        ## Publish new path
+        self.vehicle_state = "crank_planning"
+        self.curve_plot = reference_path_array[curve_start_point_idx:curve_end_point_idx + 1]
+        
+        self.planning_path_pub = new_path
+        self.pub_path_.publish(new_path)
+        return 
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):

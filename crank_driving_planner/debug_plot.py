@@ -26,11 +26,15 @@ class PlotMarker():
                     right_bound = None,
                     path=None,
                     path_index_left=None,
+                    path_index_next_left=None,
                     path_index_right= None,
+                    path_index_next_right=None,
                     rotation = False,
                     predicted_goal_pose=None,
                     predicted_trajectory=None,
-                    curve_plot=None
+                    curve_plot=None,
+                    curve_forward_point=None,
+                    curve_backward_point=None,
                     ):
         
         if ego_pose is not None:
@@ -112,8 +116,13 @@ class PlotMarker():
                 plt.plot(right_bound[:,0], right_bound[:,1], color="black")
 
                 if (path_index_left is not None) and (path_index_right is not None):
-                    plt.plot(left_bound[path_index_left:path_index_left + 2 , 0], left_bound[path_index_left:path_index_left + 2, 1], color="green")
-                    plt.plot(right_bound[path_index_right:path_index_right+ 2, 0], right_bound[path_index_right:path_index_right+ 2, 1], color="green")
+                    if path_index_next_left is None:
+                        path_index_next_left = path_index_left + 1
+                    if path_index_next_left is None:
+                        path_index_next_left = path_index_right + 1
+
+                    plt.plot(left_bound[path_index_left:path_index_next_left + 1 , 0], left_bound[path_index_left:path_index_next_left + 1, 1], color="green")
+                    plt.plot(right_bound[path_index_right:path_index_next_left + 1, 0], right_bound[path_index_right:path_index_next_left + 1, 1], color="green")
 
             ## Plot goal pose
             if predicted_goal_pose is not None:
@@ -126,6 +135,13 @@ class PlotMarker():
             ## Plot curve path
             if curve_plot is not None:
                 self.plot_red_line(curve_plot)
+            
+            if curve_forward_point is not None:
+                self.plot_point_delta(curve_forward_point)
+
+            if curve_backward_point is not None:
+                self.plot_point_delta(curve_backward_point)
+
 
             plt.xlim(plot_xmin, plot_xmax)
             plt.ylim(plot_ymin, plot_ymax)
@@ -147,4 +163,7 @@ class PlotMarker():
 
     def plot_point(self, point):
         plt.plot(point[0], point[1], marker="x")
+    
+    def plot_point_delta(self, point):
+        plt.plot(point[0], point[1], marker="^",markersize=10)
 
