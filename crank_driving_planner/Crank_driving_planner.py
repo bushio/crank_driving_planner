@@ -193,17 +193,28 @@ class CrankDrigingPlanner(Node):
             else:
                 self.stop_time += 0.5
                 self.get_logger().info("Stop time {}".format(self.stop_time))
+        else:
+            if self.crrent_vel_x > 0:
+                self.stop_time = 0.0
+            else:
+                self.stop_time += 0.5
+                self.get_logger().info("Stop time {}".format(self.stop_time))
 
         if self.vehicle_state == "long_stop":
             if self.crrent_vel_x > 0:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
 
-        if self.stop_time > self.stop_duration and self.vehicle_state == "drive":
-            self.vehicle_state = "long_stop"
-
-        if self.stop_time > self.stop_duration and (self.vehicle_state == "S-crank-right" or self.vehicle_state == "S-crank-left"):
-            self.vehicle_state = "drive"
+        if self.stop_time > self.stop_duration:
+            if self.vehicle_state == "drive":
+                self.vehicle_state = "long_stop"
+                self.stop_time = 0.0
+            elif self.vehicle_state == "S-crank-right" or self.vehicle_state == "S-crank-left":
+                self.vehicle_state = "drive"
+                self.stop_time = 0.0
+            elif self.vehicle_state =="crank_planning":
+                self.vehicle_state = "drive"
+                self.stop_time = 0.0
 
         ## If find dynamic objects, get object pose
         obj_pose = None
@@ -324,9 +335,9 @@ class CrankDrigingPlanner(Node):
         elif self.vehicle_state == "crank_planning":
             d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
             self.get_logger().info("Distance between ego pose and goal {}".format(d))
-            self.stop_time = 0.0
             if d < self.arrival_threthold:
                 self.vehicle_state = "drive"
+                self.stop_time = 0.0
                 return
             else:
                 self.pub_path_.publish(self.planning_path_pub)
