@@ -35,6 +35,7 @@ class PlotMarker():
                     curve_plot=None,
                     curve_forward_point=None,
                     curve_backward_point=None,
+                    vis_point=None
                     ):
         
         if ego_pose is not None:
@@ -122,7 +123,7 @@ class PlotMarker():
                         path_index_next_left = path_index_right + 1
 
                     plt.plot(left_bound[path_index_left:path_index_next_left + 1 , 0], left_bound[path_index_left:path_index_next_left + 1, 1], color="green")
-                    plt.plot(right_bound[path_index_right:path_index_next_left + 1, 0], right_bound[path_index_right:path_index_next_left + 1, 1], color="green")
+                    plt.plot(right_bound[path_index_right:path_index_next_right + 1, 0], right_bound[path_index_right:path_index_next_right + 1, 1], color="green")
 
             ## Plot goal pose
             if predicted_goal_pose is not None:
@@ -141,6 +142,9 @@ class PlotMarker():
 
             if curve_backward_point is not None:
                 self.plot_point_delta(curve_backward_point)
+
+            if vis_point is not None:
+                self.vis_point(vis_point)
 
 
             plt.xlim(plot_xmin, plot_xmax)
@@ -166,4 +170,7 @@ class PlotMarker():
     
     def plot_point_delta(self, point):
         plt.plot(point[0], point[1], marker="^",markersize=10)
+
+    def vis_point(selfm, point):
+        plt.plot(point[0], point[1], marker="8",markersize=8)
 

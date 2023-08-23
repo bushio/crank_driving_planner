@@ -82,6 +82,7 @@ class CrankDrigingPlanner(Node):
             self.curve_plot = None
             self.curve_backward_point = None
             self.curve_forward_point = None
+            self.debug_point = None
         ## Dynamic Window Approach
         self.use_dwa = False
         if self.use_dwa:
@@ -98,13 +99,15 @@ class CrankDrigingPlanner(Node):
         self.next_path_threshold = 10.0
         ## S-crank
         self.arrival_threthold = 1.5
-        self.curve_forward_mergin = 10.0
+        self.curve_forward_mergin = 15.0
         self.curve_backward_mergin = 6.0
 
         self.curve_alpha = 0.5
-        self.curve_vel = 0.5
-        self.beta_1 = 1.0
-        self.beta_2 = 5.0
+        self.curve_vel = 1.0
+        self.curve_lateral_vel = 5.0
+        self.curve_beta_1 = 0.5
+        self.curve_beta_2 = 1.0
+        self.curve_delta_2 = np.deg2rad(15)
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -236,6 +239,7 @@ class CrankDrigingPlanner(Node):
                                         curve_plot=self.curve_plot,
                                         curve_forward_point=self.curve_forward_point,
                                         curve_backward_point=self.curve_backward_point,
+                                        vis_point=self.debug_point
                                         )
         
         ## Check path angle
@@ -339,11 +343,11 @@ class CrankDrigingPlanner(Node):
         if self.vehicle_state == "S-crank-right":
             target_bound = right_bound
             next_path_index = self.current_right_path_index + 1
-            curve_sign = -1
+            curve_sign = 1
         elif self.vehicle_state ==  "S-crank-left":
             target_bound = left_bound
             next_path_index = self.current_left_path_index + 1
-            curve_sign = 1
+            curve_sign = -1
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
             
@@ -374,58 +378,51 @@ class CrankDrigingPlanner(Node):
 
         curve_start_point_idx = dist_to_curve_start.argmin()
         curve_end_point_idx = dist_to_curve_end.argmin()
-        
+
+        self.predicted_goal_pose = reference_path_array[curve_end_point_idx][0:2]
         self.get_logger().info("[S-crank]: Curve start_ponint_index :{} ,Next point index {}".format(curve_start_point_idx,
                                                                                       curve_end_point_idx
                                                                                       ))
         
         
         middle_point_idx = dist_to_right_angle.argmin()
-        #middle_point_idx = int((curve_start_point_idx + curve_end_point_idx) / 2 )
 
-        shift_first = curve_backward_point - reference_path_array[curve_start_point_idx , 0:2]
-
+        quarter_point_idx = int((curve_end_point_idx + middle_point_idx) / 2)
+        self.debug_point = reference_path_array[middle_point_idx][0:2]
 
         ## Calculate new path on curve
-        rad = 0
-        d_rad =  (math.pi) / abs( middle_point_idx - curve_start_point_idx)
-        yaw = getYawFromQuaternion(new_path.points[curve_start_point_idx].pose.orientation)
-        for idx in range(curve_start_point_idx ,  middle_point_idx):
-            reference_path_array[idx][0:2] += shift_first * self.curve_alpha * np.sin(rad)
+        for idx in range(curve_start_point_idx,  middle_point_idx):
+            reference_path_array[idx][0:2] += self.curve_beta_1 * forward_vec_norm
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            if d_rad < math.pi * 0.5:
-                yaw += d_rad * self.beta_1
-            else:
-                yaw -= d_rad * self.beta_2
-            new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
-            rad += d_rad
+            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
+
+            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
+            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
+
+
+        for idx in range(middle_point_idx,  quarter_point_idx):
+            reference_path_array[idx][0:2] += self.curve_beta_2 * backward_vec_norm
+            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
+            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
+            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
+            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
+
+            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
+            reference_path_array[idx - 1][2] += self.curve_delta_2 * curve_sign
+            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
 
         ## Connect new path and reference path
-        connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[middle_point_idx -1][0:2]
-        connect_vec = connect_vec[0:2] / (curve_end_point_idx - middle_point_idx)
-        for idx in range(middle_point_idx, curve_end_point_idx):
+        connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[quarter_point_idx - 1][0:2]
+        connect_vec = connect_vec[0:2] / (curve_end_point_idx - quarter_point_idx)
+        for idx in range(quarter_point_idx, curve_end_point_idx):
             reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            new_path.points[idx].pose.orientation = getQuaternionFromEuler(yaw=yaw)
-   
+            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
 
-        ## Calculate finish curve
-        quarter_point_idx = int((middle_point_idx + curve_end_point_idx)/ 2)
-        rad = 0
-        #d_rad =  (math.pi) / abs(middle_point_idx - curve_start_point_idx)
-        #yaw = getYawFromQuaternion(new_path.points[curve_start_point_idx].pose.orientation)
-        for idx in range(quarter_point_idx,  middle_point_idx):
-            reference_path_array[idx][0:2] += backward_vec_norm * 1.5
-            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
-            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
-            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-
-        self.predicted_goal_pose = reference_path_array[curve_end_point_idx][0:2]
-        
 
         ## smooting path
         min_path_length = 0.001
@@ -437,11 +434,7 @@ class CrankDrigingPlanner(Node):
                 del new_path.points[idx]
 
         goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_point_idx][0:2])
-        
-        #if goal_distance > self.goal_thresold:
-        #    self.vehicle_state = "drive"
-        #    self.pub_path_.publish(reference_path)
-        #else:
+
 
         ## Publish new path
         self.vehicle_state = "crank_planning"

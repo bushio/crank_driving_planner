@@ -99,3 +99,8 @@ def getQuaternionFromEuler(roll: float =0, pitch :float =0 ,yaw :float =0) -> Qu
     q.z = sy * cp * cr - cy * sp * sr
 
     return q
+
+def getInterpolatedYaw(p1, p2):
+    diff_x = p2[0] - p1[0]
+    diff_y = p2[1] - p1[1]
+    return np.arctan2(diff_y, diff_x)
