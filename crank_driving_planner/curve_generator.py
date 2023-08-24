@@ -9,8 +9,8 @@ class CurveGenerator:
         self.curve_vel = 1.0
         self.curve_lateral_vel = 5.0
         self.curve_beta_1 = 0.5
-        self.curve_beta_2 = 1.0
-        self.curve_delta_2 = np.deg2rad(15)
+        self.curve_beta_2 = 0.75
+        self.curve_delta_2 = np.deg2rad(90)
 
         self.arrival_threthold = 1.5
         self.curve_forward_mergin = 15.0
@@ -61,9 +61,9 @@ class CurveGenerator:
             reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
             new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
 
-
+        
         for idx in range(middle_point_idx,  quarter_point_idx):
-            reference_path_array[idx][0:2] += self.curve_beta_2 * backward_vec_norm
+            reference_path_array[idx][0:2] += self.curve_beta_2 * backward_vec_norm 
             new_path.points[idx].pose.position.x = reference_path_array[idx][0]
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
@@ -82,6 +82,9 @@ class CurveGenerator:
             new_path.points[idx].pose.position.y = reference_path_array[idx][1]
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
             new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
+
+            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
+            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
 
         ## smooting path
         min_path_length = 0.001

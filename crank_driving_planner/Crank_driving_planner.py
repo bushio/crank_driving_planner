@@ -61,13 +61,13 @@ class CrankDrigingPlanner(Node):
 
         self.vehicle_state = "initial"
         self.before_exec_time = -9999 * NANO_SECONDS
-        self.duration = 10.0
+        self.predicted_duration = 10.0
 
         self.planning_path_pub = None
 
         ## Check stop time
         self.stop_time = 0.0
-        self.stop_duration = 1
+        self.stop_duration = 60
 
         self.animation_flag = True
         self.debug = False
@@ -82,9 +82,8 @@ class CrankDrigingPlanner(Node):
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
-        self.max_traj_dist = 30.0
         
-        self.goal_thresold = 15.0
+        self.max_traj_dist = 30.0
         self.next_path_threshold = 10.0
         self.arrival_threthold = 1.5
 
@@ -311,8 +310,8 @@ class CrankDrigingPlanner(Node):
             if self.debug:
                 self.get_logger().info("Planning now")
             waite_time = (self.get_clock().now().nanoseconds - self.before_exec_time) * (NANO_SECONDS)
-            if waite_time < self.duration:
-                self.get_logger().info("Remaining wait time {}".format(self.duration - waite_time))
+            if waite_time < self.predicted_duration:
+                self.get_logger().info("Remaining wait time {}".format(self.predicted_duration - waite_time))
                 self.optimize_path_for_avoidance(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
                 return
             else:
@@ -342,11 +341,11 @@ class CrankDrigingPlanner(Node):
         if self.vehicle_state == "S-crank-right":
             target_bound = right_bound
             next_path_index = self.current_right_path_index + 1
-            curve_sign = 1
+            curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
             target_bound = left_bound
             next_path_index = self.current_left_path_index + 1
-            curve_sign = -1
+            curve_sign = 1
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
         
@@ -363,7 +362,7 @@ class CrankDrigingPlanner(Node):
         self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
         self.curve_plot = self.curve_generator.curve_plot
         self.debug_point = self.curve_generator.debug_point
-        
+
         return new_path
 
     ## Optimize Path for avoidance
