@@ -49,6 +49,10 @@ def calcDistancePoits(point_a: list, point_b: list) -> float:
         return None
     return np.linalg.norm(np.array(point_a) - np.array(point_b))
 
+def calcDistancePoitsFromArray(point_a: np.array, points: np.array) -> np.array:
+    dist = points[:, 0:2] - point_a[0:2]
+    dist = np.hypot(dist[:, 0], dist[:, 1])
+    return dist
 
 def ConvertPointSeq2Array(points: list) -> np.array:
     k = []

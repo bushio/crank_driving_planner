@@ -233,9 +233,9 @@ class CrankDrigingPlanner(Node):
         self._get_nearest_path_idx(ego_pose_array, self.left_bound, self.right_bound)
 
 
+        reference_path_array = ConvertPath2Array(self.reference_path)
         ## Visualize objects, vehicle and path on matplotlib
         if self.animation_flag:
-            reference_path_array = ConvertPath2Array(self.reference_path)
             self.plot_marker.plot_status(ego_pose_array, 
                                         object_pose =obj_pose, 
                                         left_bound=self.left_bound,
@@ -304,12 +304,17 @@ class CrankDrigingPlanner(Node):
             self.get_logger().info("Publish reference path")
             if self.debug:
                 self.get_logger().info("Publish reference path")
+
+
+            self.obstacle_check_on_path(reference_path_array, ego_pose_array, obj_pose)
+
             self.pub_path_.publish(self.reference_path)
             return
 
         ## If the vehicle is in S-crank , optimize path ##
         elif self.vehicle_state == "S-crank-right" or self.vehicle_state == "S-crank-left":
-            self.optimize_path_for_crank(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
+            new_path = self.optimize_path_for_crank(self.reference_path, ego_pose_array, obj_pose, self.left_bound, self.right_bound)
+            self.pub_path_.publish(new_path)
             return 
 
         ## If the vehicke is stopped long time, optimize trajectory ##
@@ -378,11 +383,9 @@ class CrankDrigingPlanner(Node):
         self.curve_forward_point = curve_forward_point
         self.curve_backward_point = curve_backward_point
         
-        dist_to_right_angle = target_bound[next_path_index]  - reference_path_array[: , 0:2]
-        dist_to_right_angle = np.hypot(dist_to_right_angle[:, 0], dist_to_right_angle[:, 1])
+        dist_to_right_angle = calcDistancePoitsFromArray(target_bound[next_path_index], reference_path_array[: , 0:2])
 
-        dist_to_curve_start = curve_backward_point - reference_path_array[: , 0:2]
-        dist_to_curve_start= np.hypot(dist_to_curve_start[:, 0], dist_to_curve_start[:, 1])
+        dist_to_curve_start = calcDistancePoitsFromArray(curve_backward_point, reference_path_array[: , 0:2])
 
         dist_to_curve_end =  curve_forward_point - reference_path_array[: , 0:2]
         dist_to_curve_end = np.hypot(dist_to_curve_end[:, 0], dist_to_curve_end[:, 1])
@@ -434,7 +437,6 @@ class CrankDrigingPlanner(Node):
             new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
             new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
 
-
         ## smooting path
         min_path_length = 0.001
         for idx in reversed(range(curve_start_point_idx, curve_end_point_idx)):
@@ -446,14 +448,12 @@ class CrankDrigingPlanner(Node):
 
         goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_point_idx][0:2])
 
-
         ## Publish new path
         self.vehicle_state = "crank_planning"
         self.curve_plot = reference_path_array[curve_start_point_idx:curve_end_point_idx + 1]
         
         self.planning_path_pub = new_path
-        self.pub_path_.publish(new_path)
-        return 
+        return new_path
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
@@ -461,8 +461,7 @@ class CrankDrigingPlanner(Node):
 
         # Get the nearest path point.
         reference_path_array = ConvertPath2Array(new_path)
-        dist = reference_path_array[: , 0:2] - ego_pose_array[0:2]
-        dist = np.hypot(dist[0], dist[1])
+        dist = calcDistancePoitsFromArray(ego_pose_array, reference_path_array)
         nearest_idx = dist.argmin()
 
         ## If vehicle is not stopped, publish reference path ##
@@ -569,6 +568,28 @@ class CrankDrigingPlanner(Node):
         ## Publish traj
         self.planning_traj_pub = self.output_traj
         self.pub_traj_.publish(self.output_traj)
+    
+
+    def obstacle_check_on_path(self, reference_path_array, ego_pose_array, object_pose):
+        if object_pose is None:
+            return
+        if len(object_pose) == 0:
+            return
+
+        dist = calcDistancePoitsFromArray(ego_pose_array, object_pose)
+        nearest_idx = dist.argmin()
+        
+        obj_thrshold = 10
+        if dist[nearest_idx] < obj_thrshold:
+            dit_path_ob = calcDistancePoitsFromArray(object_pose[nearest_idx], reference_path_array)
+            nearest_idx_path_ob = dit_path_ob.argmin()
+            self.debug_point = reference_path_array[nearest_idx_path_ob][0:2]
+            self.get_logger().info("Distance fron objects is {}".format(dit_path_ob[nearest_idx_path_ob]))
+            logger = self.get_logger()
+            logger.info("Distance fron objects isis {}".format(dit_path_ob[nearest_idx_path_ob]))
+        else:
+            return
+
 
 def main(args=None):
     print('Hi from CrankDrigingPlanner')
