@@ -13,9 +13,9 @@ from .predicted_objects_info import PredictedObjectsInfo
 
 ## For plot
 from .debug_plot import PlotMarker
-# Dynamic Window Approach
-from .config import Config
-from .dynamic_window_approach import DynamicWindowApproach
+
+from .curve_generator import CurveGenerator
+from .predict_path_generator import PathPredictor
 
 NANO_SECONDS = (1 / 1000)**3
 
@@ -63,16 +63,11 @@ class CrankDrigingPlanner(Node):
         self.before_exec_time = -9999 * NANO_SECONDS
         self.duration = 10.0
 
-        self.planning_traj_pub = None
         self.planning_path_pub = None
-
 
         ## Check stop time
         self.stop_time = 0.0
-        self.stop_duration = 7
-
-        
-        
+        self.stop_duration = 1
 
         self.animation_flag = True
         self.debug = False
@@ -83,31 +78,20 @@ class CrankDrigingPlanner(Node):
             self.curve_backward_point = None
             self.curve_forward_point = None
             self.debug_point = None
-        ## Dynamic Window Approach
-        self.use_dwa = False
-        if self.use_dwa:
-            self.dwa_config = Config()
-            self.predictor = DynamicWindowApproach(self.dwa_config)
+
         self.ego_pose_predicted = None
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
         self.max_traj_dist = 30.0
         
-        self.min_diff_for_update = 0.1 **3
-
         self.goal_thresold = 15.0
         self.next_path_threshold = 10.0
-        ## S-crank
         self.arrival_threthold = 1.5
-        self.curve_forward_mergin = 15.0
-        self.curve_backward_mergin = 6.0
 
-        self.curve_alpha = 0.5
-        self.curve_vel = 1.0
-        self.curve_lateral_vel = 5.0
-        self.curve_beta_1 = 0.5
-        self.curve_beta_2 = 1.0
-        self.curve_delta_2 = np.deg2rad(15)
+        self.use_dwa = False
+        if self.use_dwa:
+            self.dwa_predictor = PathPredictor(self.get_logger(), self.get_clock())
+        self.curve_generator = CurveGenerator(self.get_logger())
 
     ## Check if input data is initialized. ##
     def isReady(self):
@@ -145,12 +129,12 @@ class CrankDrigingPlanner(Node):
 
     ## 
     def _get_nearest_path_idx(self, ego_pose, left_bound, right_bound):
-        left_diff_x = left_bound[:, 0] - ego_pose[0]
-        left_diff_y = left_bound[:, 1] - ego_pose[1]
-        left_diff = np.hypot(left_diff_x, left_diff_y)
-        right_diff_x = right_bound[:, 0] - ego_pose[0]
-        right_diff_y = right_bound[:, 1] - ego_pose[1]
-        right_diff = np.hypot(right_diff_x, right_diff_y)
+        #left_diff_x = left_bound[:, 0] - ego_pose[0]
+        #left_diff_y = left_bound[:, 1] - ego_pose[1]
+        left_diff = calcDistancePoitsFromArray(ego_pose, left_bound)
+        #right_diff_x = right_bound[:, 0] - ego_pose[0]
+        #right_diff_y = right_bound[:, 1] - ego_pose[1]
+        right_diff = calcDistancePoitsFromArray(ego_pose, right_bound)
         self.current_left_path_index = left_diff.argmin()
         self.current_right_path_index = right_diff.argmin()
         self.current_path_index = min(self.current_left_path_index,
@@ -294,7 +278,6 @@ class CrankDrigingPlanner(Node):
         ## Print vehicle status
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
 
-
         ## =====================================================================
         ## ======= Check vehicle status and  publish path or trajectory ========
         ## =====================================================================
@@ -336,7 +319,8 @@ class CrankDrigingPlanner(Node):
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
                 return
-            
+        
+        ## If the vehicle is crank_planning, check distance from th predicted goal pose##
         elif self.vehicle_state == "crank_planning":
             d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
             self.get_logger().info("Distance between ego pose and goal {}".format(d))
@@ -349,7 +333,6 @@ class CrankDrigingPlanner(Node):
                 return
         else:
             return 
-
 
     def optimize_path_for_crank(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
         self.get_logger().info("[S-crank]: Calc for {}".format(self.vehicle_state))
@@ -366,181 +349,54 @@ class CrankDrigingPlanner(Node):
             curve_sign = -1
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
-            
-
-        forward_vec = target_bound[next_path_index + 1] - target_bound[next_path_index]
-        forward_vec_length = np.hypot(forward_vec[0], forward_vec[1])
-        forward_vec_norm = forward_vec / forward_vec_length 
-
-        backward_vec = target_bound[next_path_index - 1] - target_bound[next_path_index]
-        backward_veclength = np.hypot(backward_vec[0], backward_vec[1])
-        backward_vec_norm = backward_vec / backward_veclength
-
-        curve_forward_point = target_bound[next_path_index] + self.curve_forward_mergin * forward_vec_norm
-        curve_backward_point = target_bound[next_path_index] + self.curve_backward_mergin * backward_vec_norm
         
-        ## For debug
-        self.curve_forward_point = curve_forward_point
-        self.curve_backward_point = curve_backward_point
+        new_path = self.curve_generator.generate_curve_inner(
+            new_path, 
+            reference_path_array, 
+            target_bound, 
+            next_path_index, 
+            curve_sign)
         
-        dist_to_right_angle = calcDistancePoitsFromArray(target_bound[next_path_index], reference_path_array[: , 0:2])
-
-        dist_to_curve_start = calcDistancePoitsFromArray(curve_backward_point, reference_path_array[: , 0:2])
-
-        dist_to_curve_end =  curve_forward_point - reference_path_array[: , 0:2]
-        dist_to_curve_end = np.hypot(dist_to_curve_end[:, 0], dist_to_curve_end[:, 1])
-
-        curve_start_point_idx = dist_to_curve_start.argmin()
-        curve_end_point_idx = dist_to_curve_end.argmin()
-
-        self.predicted_goal_pose = reference_path_array[curve_end_point_idx][0:2]
-        self.get_logger().info("[S-crank]: Curve start_ponint_index :{} ,Next point index {}".format(curve_start_point_idx,
-                                                                                      curve_end_point_idx
-                                                                                      ))
-        
-        
-        middle_point_idx = dist_to_right_angle.argmin()
-
-        quarter_point_idx = int((curve_end_point_idx + middle_point_idx) / 2)
-        self.debug_point = reference_path_array[middle_point_idx][0:2]
-
-        ## Calculate new path on curve
-        for idx in range(curve_start_point_idx,  middle_point_idx):
-            reference_path_array[idx][0:2] += self.curve_beta_1 * forward_vec_norm
-            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
-            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
-            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
-
-            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
-            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
-
-
-        for idx in range(middle_point_idx,  quarter_point_idx):
-            reference_path_array[idx][0:2] += self.curve_beta_2 * backward_vec_norm
-            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
-            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
-            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
-
-            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
-            reference_path_array[idx - 1][2] += self.curve_delta_2 * curve_sign
-            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
-
-        ## Connect new path and reference path
-        connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[quarter_point_idx - 1][0:2]
-        connect_vec = connect_vec[0:2] / (curve_end_point_idx - quarter_point_idx)
-        for idx in range(quarter_point_idx, curve_end_point_idx):
-            reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
-            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
-            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
-            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
-
-        ## smooting path
-        min_path_length = 0.001
-        for idx in reversed(range(curve_start_point_idx, curve_end_point_idx)):
-            p1 = np.array([new_path.points[idx].pose.position.x, new_path.points[idx].pose.position.y])
-            p2 = np.array([new_path.points[idx + 1].pose.position.x, new_path.points[idx + 1].pose.position.y])
-            dt = calcDistancePoits(p1, p2)
-            if dt < min_path_length:
-                del new_path.points[idx]
-
-        goal_distance = calcDistancePoits(self.predicted_goal_pose[0:2], reference_path_array[curve_start_point_idx][0:2])
-
-        ## Publish new path
         self.vehicle_state = "crank_planning"
-        self.curve_plot = reference_path_array[curve_start_point_idx:curve_end_point_idx + 1]
-        
         self.planning_path_pub = new_path
+
+        self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
+        self.curve_plot = self.curve_generator.curve_plot
+        self.debug_point = self.curve_generator.debug_point
+        
         return new_path
 
     ## Optimize Path for avoidance
     def optimize_path_for_avoidance(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
-        new_path = reference_path
-
-        # Get the nearest path point.
-        reference_path_array = ConvertPath2Array(new_path)
-        dist = calcDistancePoitsFromArray(ego_pose_array, reference_path_array)
-        nearest_idx = dist.argmin()
 
         ## If vehicle is not stopped, publish reference path ##
-        points = new_path.points
         self.get_logger().info("Publish optimized path")
 
         # Set goal pose
         if self.vehicle_state != "long_stop_planning":
             self.predicted_goal_pose = (self.left_bound[self.current_left_path_index+1][0:2] + self.right_bound[self.current_right_path_index+1][0:2]) /2
 
-        ## Set ego_pose_predicted [x value, y value, yaw, vel, yaw vel]
-        if self.ego_pose_predicted is None:
-            self.get_logger().info("Initialize the ego pose {}".format(np.rad2deg(ego_pose_array)))
-            self.ego_pose_predicted = np.array([ego_pose_array[0],
-                                                ego_pose_array[1], 
-                                                ego_pose_array[2],
-                                                0.0,
-                                                0.0,
-                                                ])
-        elif (abs(self.ego_pose_predicted[0] -ego_pose_array[0])< self.min_diff_for_update) or \
-            (abs(self.ego_pose_predicted[1] - ego_pose_array[1])  < self.min_diff_for_update):
-            self.get_logger().info("The ego pose has not updated yet...")
-            self.pub_traj_.publish(self.output_traj)
-
-        else:
-            self.get_logger().info("Update the ego pose {}".format(ego_pose_array))
-            self.get_logger().info("goal pose {}".format(self.predicted_goal_pose))
-            self.ego_pose_predicted[0] = ego_pose_array[0]
-            self.ego_pose_predicted[1] = ego_pose_array[1]
-            self.ego_pose_predicted[2] = ego_pose_array[2]
-
         ## Predict new trajectory
         if self.use_dwa:
-            self.get_logger().info("Predict ego_pose {}".format(self.ego_pose_predicted))
-            u, predicted_traj = self.predictor.get_next_step(self.ego_pose_predicted, 
-                                                         self.predicted_goal_pose, 
-                                                         object_pose, 
-                                                         left_bound[self.current_left_path_index: self.current_left_path_index + 2], 
-                                                         right_bound[self.current_right_path_index: self.current_right_path_index + 2])
-
-            if len(predicted_traj) == 0:
-                return
-
-            self.ego_pose_predicted[3] = u[0]
-            self.ego_pose_predicted[4] = u[1]
-            output_traj = Trajectory()
-            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(predicted_traj) + 1)
-            output_traj.header = new_path.header
-            output_traj.header.stamp = self.get_clock().now().to_msg()
-
-            point_dist = 0.0
-            calc_point = self.ego_pose_predicted[0:2]
-            threshold = 2.0
-            ignore_point = 0
-            output_traj.points[0].pose.position.x = ego_pose_array[0]
-            output_traj.points[0].pose.position.y = ego_pose_array[1]
-            output_traj.points[0].longitudinal_velocity_mps = 0.5
-            for idx in range(len(predicted_traj) -1):
-                dt = calcDistancePoits(predicted_traj[idx][0:2], calc_point[0:2])
-                point_dist += dt
-                if point_dist > threshold:
-                    output_traj.points[idx + 1].pose.position.x = predicted_traj[idx][0]
-                    output_traj.points[idx + 1].pose.position.y = predicted_traj[idx][1]
-                    output_traj.points[idx].pose.orientation = getQuaternionFromEuler(yaw=predicted_traj[idx][2])
-                    output_traj.points[idx + 1].longitudinal_velocity_mps = 0.5
-                    calc_point = predicted_traj[idx][0:2]
-                    point_dist = 0.0
-                else:
-                    ignore_point += 1
-
-            for _ in range(ignore_point):
-                output_traj.points.pop(-1)
-
+            reference_path_array = ConvertPath2Array(reference_path)
+            output_traj = self.dwa_predictor.predict_path_by_dwa(
+                            reference_path, 
+                            ego_pose_array, 
+                            self.predicted_goal_pose, 
+                            object_pose, 
+                            left_bound, 
+                            right_bound,
+                            self.current_left_path_index, 
+                            self.current_right_path_index)
+            predicted_traj = self.dwa_predictor.predicted_traj
             if self.animation_flag:
                 self.get_logger().info("predicted trajectory points {}".format(len(predicted_traj)))
                 self.predicted_trajectory = predicted_traj
-
+        
         ## Use reference path as trajectory
         else:
+            reference_path_array = ConvertPath2Array(reference_path)
+            new_path = reference_path
             traj_dist = 0.0
             output_traj = Trajectory()
             output_traj.header = new_path.header
@@ -564,12 +420,9 @@ class CrankDrigingPlanner(Node):
             self.before_exec_time = self.get_clock().now().nanoseconds
             self.vehicle_state = "long_stop_planning"
 
-        
         ## Publish traj
-        self.planning_traj_pub = self.output_traj
         self.pub_traj_.publish(self.output_traj)
     
-
     def obstacle_check_on_path(self, reference_path_array, ego_pose_array, object_pose):
         if object_pose is None:
             return
@@ -585,11 +438,8 @@ class CrankDrigingPlanner(Node):
             nearest_idx_path_ob = dit_path_ob.argmin()
             self.debug_point = reference_path_array[nearest_idx_path_ob][0:2]
             self.get_logger().info("Distance fron objects is {}".format(dit_path_ob[nearest_idx_path_ob]))
-            logger = self.get_logger()
-            logger.info("Distance fron objects isis {}".format(dit_path_ob[nearest_idx_path_ob]))
         else:
             return
-
 
 def main(args=None):
     print('Hi from CrankDrigingPlanner')
