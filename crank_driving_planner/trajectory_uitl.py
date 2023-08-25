@@ -117,3 +117,7 @@ def getCosFromLines(p1, p2, p3):
         d2  = np.hypot(vec_2[0], vec_2[1])
         cos = np.dot(vec_1, vec_2) / (d1 * d2)
         return cos
+
+def getTrianglePointFromPoints(p, q):
+    vec = q -p
+    return np.array([p[0] + vec[0], p[1] + vec[1]])

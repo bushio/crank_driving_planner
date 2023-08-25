@@ -258,10 +258,10 @@ class CrankDrigingPlanner(Node):
 
                 if self.vehicle_state == "drive":
                     if(cos_left < 0.2 and cos_left > -0.2):
-                        self.vehicle_state = "S-crank-left"
+                        self.vehicle_state = "S-crank-right"
 
                     elif (cos_right < 0.2 and cos_right > -0.2):
-                        self.vehicle_state = "S-crank-right"
+                        self.vehicle_state = "S-crank-left"
 
         ## Print vehicle status
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
@@ -328,30 +328,44 @@ class CrankDrigingPlanner(Node):
         reference_path_array = ConvertPath2Array(reference_path)
         
         if self.vehicle_state == "S-crank-right":
-            target_bound = right_bound
-            next_path_index = self.current_right_path_index + 1
+            outer_bound= left_bound
+            inner_bound = right_bound
+            outer_bound_index = self.current_left_path_index
+            inner_bound_index = self.current_right_path_index
             curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
-            target_bound = left_bound
-            next_path_index = self.current_left_path_index + 1
+            outer_bound = right_bound
+            inner_bound= left_bound
+            outer_bound_index = self.current_right_path_index
+            inner_bound_index = self.current_left_path_index
             curve_sign = 1
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
         
-        new_path = self.curve_generator.generate_curve_inner(
+        #new_path = self.curve_generator.generate_curve_inner(
+        #    new_path, 
+        #    reference_path_array, 
+        #    outer_bound, 
+        #    outer_bound_index + 1, 
+        #    curve_sign)
+
+        result = self.curve_generator.generate_curve_inner2(
             new_path, 
             reference_path_array, 
-            target_bound, 
-            next_path_index, 
+            outer_bound,
+            outer_bound_index,
+            inner_bound,
+            inner_bound_index,
             curve_sign)
         
-        self.vehicle_state = "crank_planning"
+        if result is not None:
+            self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
+            self.curve_plot = self.curve_generator.curve_plot
+            self.debug_point = self.curve_generator.debug_point
+            self.vehicle_state = "crank_planning"
+            new_path = result
+
         self.planning_path_pub = new_path
-
-        self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
-        self.curve_plot = self.curve_generator.curve_plot
-        self.debug_point = self.curve_generator.debug_point
-
         return new_path
 
     ## Optimize Path for avoidance
