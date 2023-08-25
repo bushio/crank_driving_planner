@@ -108,3 +108,12 @@ def getInterpolatedYaw(p1, p2):
     diff_x = p2[0] - p1[0]
     diff_y = p2[1] - p1[1]
     return np.arctan2(diff_y, diff_x)
+
+
+def getCosFromLines(p1, p2, p3):
+        vec_1 = p1 - p2
+        vec_2= p3 - p2
+        d1  = np.hypot(vec_1[0], vec_1[1])
+        d2  = np.hypot(vec_2[0], vec_2[1])
+        cos = np.dot(vec_1, vec_2) / (d1 * d2)
+        return cos

@@ -246,33 +246,22 @@ class CrankDrigingPlanner(Node):
                                                 ego_pose_array[0:2])
             
             if next_right_path < self.next_path_threshold or next_left_path < self.next_path_threshold:
-                left_bound_1 = self.left_bound[self.current_left_path_index] - self.left_bound[self.current_left_path_index + 1]
-                left_bound_2 = self.left_bound[self.current_left_path_index + 2] - self.left_bound[self.current_left_path_index + 1]
-                left_bound_1_length = np.hypot(left_bound_1[0], left_bound_1[1])
-                left_bound_2_length = np.hypot(left_bound_2[0], left_bound_2[1])
-
-                right_bound_1 = self.right_bound[self.current_right_path_index] - self.right_bound[self.current_right_path_index + 1]
-                right_bound_2 = self.right_bound[self.current_right_path_index + 2] - self.right_bound[self.current_right_path_index + 1]
-
-                right_bound_1_length = np.hypot(right_bound_1[0], right_bound_1[1])
-                right_bound_2_length = np.hypot(right_bound_2[0], right_bound_2[1])
-
-                cos_left = np.dot(left_bound_1, left_bound_2) / (left_bound_1_length * left_bound_2_length)
-                cos_right = np.dot(right_bound_1, right_bound_2) / (right_bound_1_length * right_bound_2_length)
+                cos_left = getCosFromLines(self.left_bound[self.current_left_path_index], 
+                                           self.left_bound[self.current_left_path_index + 1],
+                                           self.left_bound[self.current_left_path_index + 2])
+                
+                cos_right = getCosFromLines(self.right_bound[self.current_right_path_index],
+                                            self.right_bound[self.current_right_path_index + 1],
+                                            self.right_bound[self.current_right_path_index + 2])
                 self.get_logger().info("Left bound cos {}".format(cos_left))
                 self.get_logger().info("Right bound cos {}".format(cos_right))
 
                 if self.vehicle_state == "drive":
                     if(cos_left < 0.2 and cos_left > -0.2):
-                        if left_bound_1_length > 5:
-                            self.vehicle_state = "S-crank-left"
-                        else:
-                            self.get_logger().info("Left bound length {}".format(left_bound_1_length))
+                        self.vehicle_state = "S-crank-left"
+
                     elif (cos_right < 0.2 and cos_right > -0.2):
-                        if right_bound_1_length > 5:
-                            self.vehicle_state = "S-crank-right"
-                        else:
-                            self.get_logger().info("Right bound length {}".format(right_bound_1_length))
+                        self.vehicle_state = "S-crank-right"
 
         ## Print vehicle status
         self.get_logger().info("Vehicle state is {}".format(self.vehicle_state))
