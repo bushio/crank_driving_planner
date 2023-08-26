@@ -24,16 +24,16 @@ def getAccelPointsFromTrajectory(trajctory: Trajectory) -> list:
             points_accel_list.append(p.acceleration_mps2)
     return points_accel_list
 
-# ToDO: Change to BinarySearch
-def getNearestPointIndex(point, points) -> int:
-    d = calcDistancePoits(point, points[0])
-    idx = 0
-    for i, p in enumerate(points[1:]):
-        d_ = calcDistancePoits(point, p)
-        if d_ < d:
-            d = d_
-            idx = i
-    return idx 
+
+def calcDistancePoitsFromArray(point_a: np.array, points: np.array) -> np.array:
+    dist = points[:, 0:2] - point_a[0:2]
+    dist = np.hypot(dist[:, 0], dist[:, 1])
+    return dist
+
+
+def getNearestPointIndex(point: np.array, points: np.array) -> int:
+    dist =  calcDistancePoitsFromArray(point, points)
+    return dist.argmin()
 
 
 def ConvertPoint2List(p) -> np.array:
@@ -49,10 +49,6 @@ def calcDistancePoits(point_a: list, point_b: list) -> float:
         return None
     return np.linalg.norm(np.array(point_a) - np.array(point_b))
 
-def calcDistancePoitsFromArray(point_a: np.array, points: np.array) -> np.array:
-    dist = points[:, 0:2] - point_a[0:2]
-    dist = np.hypot(dist[:, 0], dist[:, 1])
-    return dist
 
 def ConvertPointSeq2Array(points: list) -> np.array:
     k = []
@@ -118,6 +114,18 @@ def getCosFromLines(p1, p2, p3):
         cos = np.dot(vec_1, vec_2) / (d1 * d2)
         return cos
 
-def getTrianglePointFromPoints(p, q):
-    vec = q -p
-    return np.array([p[0] + vec[0], p[1] + vec[1]])
+def getCrossPoint(p1, vec1, p2, vec2):
+    d = vec1[0] * vec2[1] - vec2[0] * vec1[1]
+    if d == 0:
+         return None
+    sn = vec2[1] * (p2[0] - p1[0]) - vec2[0] * (p2[1] - p1[1])
+    print(sn / d)
+    return np.array([p1[0] + vec1[0] * (sn / d), p1[1] + vec1[1] * (sn / d)])
+    
+def getNormVec(p, q):
+     vec = q - p
+     vec /= np.hypot(vec[0], vec[1])
+     return vec
+
+def getTriangleSize(p1, p2, p3):
+     return 0.5 * abs(p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1]))

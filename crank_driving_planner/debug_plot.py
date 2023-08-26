@@ -172,5 +172,8 @@ class PlotMarker():
         plt.plot(point[0], point[1], marker="^",markersize=10)
 
     def vis_point(selfm, point):
-        plt.plot(point[0], point[1], marker="8",markersize=8)
-
+        if len(point.shape) > 1:
+            plt.scatter(point[:,0], point[:, 1], s=20, marker="D")
+        else:
+            plt.plot(point[0], point[1], marker="8",markersize=8)
+        

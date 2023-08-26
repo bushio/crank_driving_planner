@@ -256,7 +256,8 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("Left bound cos {}".format(cos_left))
                 self.get_logger().info("Right bound cos {}".format(cos_right))
 
-                if self.vehicle_state == "drive":
+                #if self.vehicle_state == "drive":
+                if self.vehicle_state == "initial" or self.vehicle_state == "drive":
                     if(cos_left < 0.2 and cos_left > -0.2):
                         self.vehicle_state = "S-crank-right"
 
@@ -310,8 +311,9 @@ class CrankDrigingPlanner(Node):
         
         ## If the vehicle is crank_planning, check distance from th predicted goal pose##
         elif self.vehicle_state == "crank_planning":
-            d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
-            self.get_logger().info("Distance between ego pose and goal {}".format(d))
+            #d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
+            #self.get_logger().info("Distance between ego pose and goal {}".format(d))
+            d = 1000
             if d < self.arrival_threthold:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
@@ -398,7 +400,11 @@ class CrankDrigingPlanner(Node):
         ## Use reference path as trajectory
         else:
             reference_path_array = ConvertPath2Array(reference_path)
+            nearest_idx = getNearestPointIndex(ego_pose_array[0:2], reference_path_array[:, 0:2])
+            for i in range(15):
+                reference_path.points[nearest_idx + i].pose.position.y -= 0.5
             new_path = reference_path
+            
             traj_dist = 0.0
             output_traj = Trajectory()
             output_traj.header = new_path.header
@@ -408,6 +414,7 @@ class CrankDrigingPlanner(Node):
                 traj_dist  += calcDistancePoits(reference_path_array[idx][0:2], reference_path_array[idx - 1][0:2])
                 if traj_dist > self.max_traj_dist:
                     break
+
             ignore_point = len(reference_path_array) - idx
             for _ in range(ignore_point):
                 if len(output_traj.points) <= 10:
