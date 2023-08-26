@@ -1,9 +1,18 @@
 
-from autoware_auto_planning_msgs.msg import Trajectory, Path, TrajectoryPoint
+from autoware_auto_planning_msgs.msg import Trajectory, Path, TrajectoryPoint, PathPoint
 from geometry_msgs.msg import Point, Quaternion
 import math
 import numpy as np
 
+
+def getPathPoint(pose_array: np.array, longitudinal_vel: float, lateral_vel: float, z_value=0.0):
+    path_point = PathPoint()
+    path_point.pose.position.x = pose_array[0]
+    path_point.pose.position.y = pose_array[1]
+    path_point.pose.position.z = z_value
+    path_point.longitudinal_velocity_mps  = longitudinal_vel
+    path_point.lateral_velocity_mps  = lateral_vel
+    return path_point
 
 def getVelocityPointsFromTrajectory(trajctory: Trajectory) -> list:
     points_vel_list = []
@@ -105,6 +114,10 @@ def getInterpolatedYaw(p1, p2):
     diff_y = p2[1] - p1[1]
     return np.arctan2(diff_y, diff_x)
 
+def getInterpolatedYawFromPoint(p1, p2):
+    diff_x = p2.pose.position.x - p1.pose.position.x
+    diff_y = p2.pose.position.y - p1.pose.position.y
+    return np.arctan2(diff_y, diff_x)
 
 def getCosFromLines(p1, p2, p3):
         vec_1 = p1 - p2

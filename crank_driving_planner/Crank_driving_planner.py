@@ -128,11 +128,7 @@ class CrankDrigingPlanner(Node):
 
     ## 
     def _get_nearest_path_idx(self, ego_pose, left_bound, right_bound):
-        #left_diff_x = left_bound[:, 0] - ego_pose[0]
-        #left_diff_y = left_bound[:, 1] - ego_pose[1]
         left_diff = calcDistancePoitsFromArray(ego_pose, left_bound)
-        #right_diff_x = right_bound[:, 0] - ego_pose[0]
-        #right_diff_y = right_bound[:, 1] - ego_pose[1]
         right_diff = calcDistancePoitsFromArray(ego_pose, right_bound)
         self.current_left_path_index = left_diff.argmin()
         self.current_right_path_index = right_diff.argmin()
@@ -246,22 +242,36 @@ class CrankDrigingPlanner(Node):
                                                 ego_pose_array[0:2])
             
             if next_right_path < self.next_path_threshold or next_left_path < self.next_path_threshold:
-                cos_left = getCosFromLines(self.left_bound[self.current_left_path_index], 
+                if self.current_left_path_index > 0:
+                    cos_left  = getCosFromLines(self.left_bound[self.current_left_path_index - 1], 
+                                            self.left_bound[self.current_left_path_index],
+                                            self.left_bound[self.current_left_path_index + 1])
+                else:
+                    cos_left = -999
+
+                if self.current_right_path_index > 0:
+                    cos_right = getCosFromLines(self.right_bound[self.current_right_path_index - 1],
+                                            self.right_bound[self.current_right_path_index],
+                                            self.right_bound[self.current_right_path_index + 1])
+                else:
+                    cos_right = -1
+                
+                cos_left_next = getCosFromLines(self.left_bound[self.current_left_path_index], 
                                            self.left_bound[self.current_left_path_index + 1],
                                            self.left_bound[self.current_left_path_index + 2])
                 
-                cos_right = getCosFromLines(self.right_bound[self.current_right_path_index],
+                cos_right_next = getCosFromLines(self.right_bound[self.current_right_path_index],
                                             self.right_bound[self.current_right_path_index + 1],
                                             self.right_bound[self.current_right_path_index + 2])
-                self.get_logger().info("Left bound cos {}".format(cos_left))
-                self.get_logger().info("Right bound cos {}".format(cos_right))
+                self.get_logger().info("Left bound cos current {} next {}".format(cos_left, cos_left_next))
+                self.get_logger().info("Right bound cos current {} next {}".format(cos_right, cos_right_next))
 
                 #if self.vehicle_state == "drive":
                 if self.vehicle_state == "initial" or self.vehicle_state == "drive":
-                    if(cos_left < 0.2 and cos_left > -0.2):
+                    if(cos_left_next < 0.2 and  cos_left_next> -0.2) or (cos_left < 0.2 and  cos_left > -0.2):
                         self.vehicle_state = "S-crank-right"
 
-                    elif (cos_right < 0.2 and cos_right > -0.2):
+                    elif (cos_right_next < 0.2 and cos_right_next > -0.2) or  (cos_right < 0.2 and cos_right > -0.2):
                         self.vehicle_state = "S-crank-left"
 
         ## Print vehicle status
@@ -311,12 +321,12 @@ class CrankDrigingPlanner(Node):
         
         ## If the vehicle is crank_planning, check distance from th predicted goal pose##
         elif self.vehicle_state == "crank_planning":
-            #d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
-            #self.get_logger().info("Distance between ego pose and goal {}".format(d))
-            d = 1000
+            d = calcDistancePoits(self.predicted_goal_pose[0:2], ego_pose_array[0:2])
+            self.get_logger().info("Distance between ego pose and goal {}".format(d))
             if d < self.arrival_threthold:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
+                self.curve_generator.reset_enable_planning()
                 return
             else:
                 self.pub_path_.publish(self.planning_path_pub)
@@ -401,13 +411,13 @@ class CrankDrigingPlanner(Node):
         else:
             reference_path_array = ConvertPath2Array(reference_path)
             nearest_idx = getNearestPointIndex(ego_pose_array[0:2], reference_path_array[:, 0:2])
-            for i in range(15):
-                reference_path.points[nearest_idx + i].pose.position.y -= 0.5
-            new_path = reference_path
+            for i in range(50):
+                reference_path_array[nearest_idx + i][1] -= 0.5
+                reference_path.points[nearest_idx + i].pose.position.y -= reference_path_array[nearest_idx + i][1]
             
             traj_dist = 0.0
             output_traj = Trajectory()
-            output_traj.header = new_path.header
+            output_traj.header = reference_path.header
             output_traj.header.stamp = self.get_clock().now().to_msg()
             output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(self.reference_path.points))
             for idx in range(1, len(reference_path_array)):
@@ -420,6 +430,8 @@ class CrankDrigingPlanner(Node):
                 if len(output_traj.points) <= 10:
                     break
                 output_traj.points.pop(-1)
+            
+            self.predicted_trajectory = reference_path_array
         
         self.output_traj = output_traj
         self.get_logger().info("Output trajectory points {}".format(len(output_traj.points)))
@@ -431,6 +443,7 @@ class CrankDrigingPlanner(Node):
 
         ## Publish traj
         self.pub_traj_.publish(self.output_traj)
+        
     
     def obstacle_check_on_path(self, reference_path_array, ego_pose_array, object_pose):
         if object_pose is None:

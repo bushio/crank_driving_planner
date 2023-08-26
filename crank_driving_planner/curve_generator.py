@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 from .trajectory_uitl import *
+from autoware_auto_planning_msgs.msg import Path, PathPoint
 
 class CurveGenerator:
     def __init__(self, logger):
@@ -17,9 +18,7 @@ class CurveGenerator:
         self.curve_forward_mergin = 15.0
         self.curve_backward_mergin = 6.0
 
-
         self.enable_planning_flag = True
-
         self.inner_finish_mergin = 5.0
         self.inner_start_mergin = 2.0
         self.margin_idx = 10
@@ -53,7 +52,6 @@ class CurveGenerator:
                                                                                       curve_end_point_idx
                                                                                       ))
         
-        
         middle_point_idx = dist_to_right_angle.argmin()
 
         quarter_point_idx = int((curve_end_point_idx + middle_point_idx) / 2)
@@ -85,21 +83,6 @@ class CurveGenerator:
             new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
 
             rad += rad_d
-        ## Connect new path and reference path
-        """
-        connect_vec = reference_path_array[curve_end_point_idx][0:2] - reference_path_array[quarter_point_idx - 1][0:2]
-        connect_vec = connect_vec[0:2] / (curve_end_point_idx - quarter_point_idx)
-        for idx in range(quarter_point_idx, curve_end_point_idx):
-            reference_path_array[idx][0:2] = reference_path_array[idx -1 ][0:2] + connect_vec
-            new_path.points[idx].pose.position.x = reference_path_array[idx][0]
-            new_path.points[idx].pose.position.y = reference_path_array[idx][1]
-            new_path.points[idx].longitudinal_velocity_mps = self.curve_vel
-            new_path.points[idx].lateral_velocity_mps = self.curve_lateral_vel
-
-            reference_path_array[idx - 1][2] = getInterpolatedYaw(reference_path_array[idx - 1], reference_path_array[idx])
-            new_path.points[idx - 1].pose.orientation = getQuaternionFromEuler(yaw=reference_path_array[idx - 1][2])
-        """
-            
 
         ## smooting path
         min_path_length = 0.001
@@ -179,41 +162,41 @@ class CurveGenerator:
             curve_end_idx = getNearestPointIndex(inner_finish_point, reference_path_array[:, 0:2])
             curve_end_margin_idx = getNearestPointIndex(inner_finish_mergin_point, reference_path_array[:, 0:2])
 
-
-
             self.logger.info("Road width {}".format(road_width))
 
-            
             if curve_sign < 0:
                 ## Turn right
                 current_rad = math.pi
             else:
                 ## Turn left
-                current_rad = 0
+                current_rad = math.pi
 
             if road_width > 3.0:
                 R = 4.0
+                self.alpha = 0.7
+            elif road_width > 2.5:
+                 R = 4.5
+                 self.alpha = 0.6
             else:
-                R = 4.5
-
+                R = 3.0
 
             ## Set curve start and end
             self.curve_start_idx = curve_start_margin_idx
             self.curve_end_idx = curve_end_margin_idx
 
             curve_start_point = copy.deepcopy(reference_path_array[self.curve_start_idx, 0:2])
-            #curve_end_point = 0.5 * (outer_finish_point - inner_finish_point) + inner_finish_point
+            finish_point = 0.5 * (outer_finish_point - inner_finish_point) + inner_finish_point
             curve_end_point = copy.deepcopy(reference_path_array[self.curve_end_idx, 0:2])
-            self.predicted_goal_pose = curve_end_point
+            
 
 
             ## Calculate small path
-            self.alpha = 0.7
+            print("rad",road_width, self.alpha )
             d_rad = (math.pi * self.alpha) /(self.curve_end_idx - self.curve_start_idx)
             small_path = copy.deepcopy(reference_path_array)
             raidus_vec = inner_forward_vec * R
             center_point = curve_start_point[0:2] + raidus_vec
-            center_point
+            
             for idx in range(self.curve_start_idx, self.curve_end_idx):
                 rotated_vec = np.array([raidus_vec[0] * np.cos(current_rad) - raidus_vec[1] * np.sin(current_rad),
                                     raidus_vec[0] * np.sin(current_rad) + raidus_vec[1] * np.cos(current_rad)])
@@ -222,35 +205,96 @@ class CurveGenerator:
                 small_path[idx][1] = center_point[1] + rotated_vec[1] * R
                 current_rad +=  d_rad * curve_sign
 
-            small_path = self._connect_path( 
+            #
+            small_path, add_idx = self._connect_path( 
                     small_path , 
-                    self.curve_end_idx,
+                    self.curve_end_idx - 1 ,
                     self.curve_end_idx + self.margin_idx,
                     min_path_point_dist = 0.5)
+            self.logger.info("Path points num {}".format(len(small_path)))
+            
+            """
+            small_path = self._smooth_path(
+                small_path,
+                self.curve_start_idx,
+                self.curve_end_idx + self.margin_idx
+            )
+            """
+            self.predicted_goal_pose = finish_point
+            ## Cut path
+            small_path_cut = small_path[self.curve_start_idx: self.curve_end_idx + add_idx]
 
-            self.curve_plot = small_path[self.curve_start_idx -1 :]
+            self.logger.info("Path points num {}".format(len(small_path)))
+            new_path = self._store_array_into_path(
+                           reference_path,
+                           small_path_cut,
+                           self.curve_start_idx)
+            
+            self.curve_plot = small_path_cut
             self.debug_point = np.array([
                                          center_point,
                                          curve_start_point,
                                          #inner_finish_point,
                                          #outer_finish_point,
-                                         inner_start_mergin_point,
-                                         inner_finish_mergin_point
+                                         #inner_start_mergin_point,
+                                         #inner_finish_mergin_point
                                          ])
-            return reference_path
+            return new_path
         
-    
+    def reset_enable_planning(self):
+        self.enable_planning_flag = True
+        
+    def _store_array_into_path(self,
+                           new_path,
+                           predicted_path_array,
+                           start_idx
+                           ):
+        start_idx = max(start_idx, 1)
+        reference_points = copy.deepcopy(new_path.points)
+        z_value = reference_points[0].pose.position.z
+        new_path.points = []
+        ## store refrence path into new_path
+        for idx in range(start_idx):
+                new_path.points.append(reference_points[idx])
+        
+        ## store predicted path into new_path
+        for idx in range(len(predicted_path_array)):
+                pose = predicted_path_array[idx]
+                point = getPathPoint(pose,
+                                    self.curve_vel, 
+                                    self.curve_lateral_vel,
+                                    z_value=z_value)
+                yaw = getInterpolatedYawFromPoint(new_path.points[-1], point)
+                point.pose.orientation = getQuaternionFromEuler(yaw=yaw)
+                new_path.points.append(point)
+        return new_path
 
     def _connect_path(self, 
                       reference_path_array, 
                       connect_start_idx,
                       connect_end_idx,
                       min_path_point_dist = 0.5):
+        connect_end_idx = min(connect_end_idx, len(reference_path_array) - 1)
         # Connect_path
         connect_vec = getNormVec(reference_path_array[connect_start_idx, 0:2], reference_path_array[connect_end_idx, 0:2]) * min_path_point_dist
         connect_dist = calcDistancePoits(reference_path_array[connect_start_idx, 0:2], reference_path_array[connect_end_idx, 0:2])
         connect_point_num = int(connect_dist / 0.5)
         for idx in range(connect_point_num):
             offset_idx = connect_start_idx + idx
+            if offset_idx > len(reference_path_array) - 1:
+                break
             reference_path_array[offset_idx][0:2] = reference_path_array[offset_idx -1][0:2] + connect_vec
+        return reference_path_array,idx
+
+    def _smooth_path(self, 
+                    reference_path_array, 
+                    start_idx,
+                    end_idx,
+                    min_path_length = 0.001):
+        # Connect_path
+        end_idx = min(len(reference_path_array) - 2, end_idx)
+        for idx in reversed(range(start_idx, end_idx)):
+            dt = calcDistancePoits(reference_path_array[idx, 0:2], reference_path_array[idx + 1, 0:2])
+            if dt < min_path_length:
+                del reference_path_array[idx]
         return reference_path_array
