@@ -17,6 +17,7 @@ from .debug_plot import PlotMarker
 
 from .curve_generator import CurveGenerator
 from .predict_path_generator import PathPredictor
+from .config import CurveConfig
 
 NANO_SECONDS = (1 / 1000)**3
 
@@ -46,6 +47,11 @@ class CrankDrigingPlanner(Node):
                                                 10)
         # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
         self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
+
+
+        ## Road config
+
+        self.curve_cfg = CurveConfig()
 
         # Initialize input ##
         self.reference_path = None
@@ -83,7 +89,7 @@ class CrankDrigingPlanner(Node):
         self.predicted_goal_pose = None
         self.predicted_trajectory = None
         
-        self.max_traj_dist = 30.0
+        self.max_traj_dist = 15.0
         self.next_path_threshold = 10.0
         self.arrival_threthold = 1.5
 
@@ -334,30 +340,46 @@ class CrankDrigingPlanner(Node):
         if (sharp_index is None) or (diag_idx is None):
             return new_path
         
+        ## Judge actions from Road width 
         road_width = getRoadWidth(inner_bound, outer_bound, diag_idx, sharp_index)
         self.get_logger().info("Road width {}".format(road_width))
-
-        if road_width > 3.0:
-            R = 4.0
-            curve_angle = 0.7
-        elif road_width > 2.5:
-            R = 4.5
-            curve_angle = 0.6
+        if road_width >= 3.2:
+            R = self.curve_cfg.circle_radius[0]
+            curve_angle = self.curve_cfg.circle_angle_rate[0]
+            predict_curve = self.curve_cfg.exec_predict[0]
+        elif road_width >= 2.5 and road_width < 3.2:
+            R = self.curve_cfg.circle_radius[1]
+            curve_angle = self.curve_cfg.circle_angle_rate[1]
+            predict_curve = self.curve_cfg.exec_predict[1]
+        elif road_width > 2.0  and road_width < 2.5:
+            R = self.curve_cfg.circle_radius[2]
+            curve_angle = self.curve_cfg.circle_angle_rate[2]
+            predict_curve = self.curve_cfg.exec_predict[2]
         else:
-            R = 3.0
+            R = self.curve_cfg.circle_radius[3]
+            curve_angle = self.curve_cfg.circle_angle_rate[3]
+            predict_curve = self.curve_cfg.exec_predict[3]
+        
+        dist_to_sharp_point = calcDistancePoits(ego_pose_array[0:2], outer_bound[sharp_index])
+        if dist_to_sharp_point > self.curve_cfg.sharp_dist_threshold:
+            predict_curve = False
 
-        result = self.curve_generator.generate_curve_circle(
-            new_path, 
-            reference_path_array, 
-            outer_bound,
-            inner_bound,
-            diag_idx,
-            sharp_index,
-            road_width,
-            curve_sign,
-            carve_radius = R,
-            curve_angle = curve_angle
-            )
+        ## Predict curve path
+        if predict_curve:
+            result = self.curve_generator.generate_curve_circle(
+                new_path, 
+                reference_path_array, 
+                outer_bound,
+                inner_bound,
+                diag_idx,
+                sharp_index,
+                road_width,
+                curve_sign,
+                carve_radius = R,
+                curve_angle = curve_angle
+                )
+        else:
+            result = None
     
         if result is not None:
             self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
@@ -449,7 +471,7 @@ class CrankDrigingPlanner(Node):
             dit_path_ob = calcDistancePoitsFromArray(object_pose[nearest_idx], reference_path_array)
             nearest_idx_path_ob = dit_path_ob.argmin()
             self.debug_point = reference_path_array[nearest_idx_path_ob][0:2]
-            self.get_logger().info("Distance fron objects is {}".format(dit_path_ob[nearest_idx_path_ob]))
+            #self.get_logger().info("Distance fron objects is {}".format(dit_path_ob[nearest_idx_path_ob]))
         else:
             return
 
