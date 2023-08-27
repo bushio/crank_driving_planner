@@ -1,8 +1,8 @@
 
 import numpy as np
-from .trajectory_uitl import *
+from .util import *
 from .config import Config
-from .dynamic_window_approach import DynamicWindowApproach
+from .predictor import DynamicWindowApproach
 
 class PathPredictor:
     def __init__(self, logger, clock):

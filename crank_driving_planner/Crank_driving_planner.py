@@ -8,7 +8,7 @@ from autoware_auto_perception_msgs.msg import PredictedObjects
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
 
-from .trajectory_uitl import *
+from .util import *
 from .predicted_objects_info import PredictedObjectsInfo
 
 ## For plot
@@ -44,7 +44,6 @@ class CrankDrigingPlanner(Node):
                                                "~/output/path", 
                                                 10)
         # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
-        #self.pub_traj_ = self.create_publisher(Trajectory, "/planning/scenario_planning/lane_driving/trajectory", 10)
         self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
 
         # Initialize input ##
@@ -419,8 +418,10 @@ class CrankDrigingPlanner(Node):
             output_traj = Trajectory()
             output_traj.header = reference_path.header
             output_traj.header.stamp = self.get_clock().now().to_msg()
-            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, len(self.reference_path.points))
-            for idx in range(1, len(reference_path_array)):
+            output_traj.points = convertPathToTrajectoryPoints(self.reference_path, 
+                                                               start_idx=nearest_idx,
+                                                               end_idx=len(self.reference_path.points) - 1)
+            for idx in range(nearest_idx, len(reference_path_array)):
                 traj_dist  += calcDistancePoits(reference_path_array[idx][0:2], reference_path_array[idx - 1][0:2])
                 if traj_dist > self.max_traj_dist:
                     break
@@ -430,7 +431,6 @@ class CrankDrigingPlanner(Node):
                 if len(output_traj.points) <= 10:
                     break
                 output_traj.points.pop(-1)
-            
             self.predicted_trajectory = reference_path_array
         
         self.output_traj = output_traj
