@@ -312,33 +312,53 @@ class CrankDrigingPlanner(Node):
 
     def optimize_path_for_crank(self, reference_path, ego_pose_array, object_pose, left_bound, right_bound):
         self.get_logger().info("[S-crank]: Calc for {}".format(self.vehicle_state))
-        new_path = reference_path
-        reference_path_array = ConvertPath2Array(reference_path)
-        
         if self.vehicle_state == "S-crank-right":
             outer_bound= left_bound
             inner_bound = right_bound
-            outer_bound_index = self.current_left_path_index
-            inner_bound_index = self.current_right_path_index
             curve_sign = -1
         elif self.vehicle_state ==  "S-crank-left":
             outer_bound = right_bound
             inner_bound= left_bound
-            outer_bound_index = self.current_right_path_index
-            inner_bound_index = self.current_left_path_index
             curve_sign = 1
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
         
+        new_path = reference_path
+        reference_path_array = ConvertPath2Array(reference_path)
+
+        ## Get the diag line of inner bound.
+        diag_idx = get_diag_point(inner_bound)
+
+        ## Get the sharp point of outer bound.
+        sharp_index = get_sharp_point(outer_bound)
+        if (sharp_index is None) or (diag_idx is None):
+            return new_path
+        
+        road_width = getRoadWidth(inner_bound, outer_bound, diag_idx, sharp_index)
+        self.get_logger().info("Road width {}".format(road_width))
+
+        if road_width > 3.0:
+            R = 4.0
+            curve_angle = 0.7
+        elif road_width > 2.5:
+            R = 4.5
+            curve_angle = 0.6
+        else:
+            R = 3.0
+
         result = self.curve_generator.generate_curve_circle(
             new_path, 
             reference_path_array, 
             outer_bound,
-            outer_bound_index,
             inner_bound,
-            inner_bound_index,
-            curve_sign)
-        
+            diag_idx,
+            sharp_index,
+            road_width,
+            curve_sign,
+            carve_radius = R,
+            curve_angle = curve_angle
+            )
+    
         if result is not None:
             self.predicted_goal_pose = self.curve_generator.predicted_goal_pose
             self.curve_plot = self.curve_generator.curve_plot

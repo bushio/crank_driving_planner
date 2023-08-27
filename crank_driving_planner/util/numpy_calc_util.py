@@ -72,3 +72,17 @@ def getCosFromLines(p1: np.array, p2: np.array, p3: np.array) -> float:
     d2  = np.hypot(vec_2[0], vec_2[1])
     cos = np.dot(vec_1, vec_2) / (d1 * d2)
     return cos
+
+def getRoadWidth(inner_bound: np.array, outer_bound: np.array, diag_idx: int, sharp_idx: int) -> float:
+    """
+    Calculate the width of road afeter curve
+    """
+
+    inner_backward_vec = getNormVec(inner_bound[diag_idx], inner_bound[diag_idx - 1])
+    outer_forward_vec = getNormVec(outer_bound[sharp_idx], outer_bound[sharp_idx + 1])
+    inner_finish_point = inner_bound[diag_idx + 1]
+    outer_finish_point = getCrossPoint(inner_bound[diag_idx + 1], 
+                                            -1 *inner_backward_vec,
+                                            outer_bound[sharp_idx],
+                                            outer_forward_vec)
+    return calcDistancePoits(outer_finish_point, inner_finish_point)

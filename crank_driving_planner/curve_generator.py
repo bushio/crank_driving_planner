@@ -98,20 +98,10 @@ class CurveGenerator:
         self.curve_plot = reference_path_array[curve_start_point_idx:curve_end_point_idx + 1]
         return new_path
     
+    def generate_curve_circle(self, reference_path, reference_path_array : np.array, outer_bound : np.array, inner_bound : np.array, 
+                              diag_idx: int, sharp_index: int, road_width :float,  curve_sign:int,
+                              carve_radius: float = 3.0, curve_angle :float =0.6):
 
-
-
-    def generate_curve_circle(self, reference_path, reference_path_array : np.array, outer_bound : np.array, outer_bound_index: int,
-                              inner_bound : np.array, inner_bound_index: int, curve_sign: int):
-        
-        ## Get the diag line of inner bound.
-        diag_idx = self._get_diag_point(inner_bound)
-
-        ## Get the sharp point of outer bound.
-        sharp_index = self._get_sharp_point(outer_bound)
-        if (sharp_index is None) or (diag_idx is None):
-            return
-        
         if  self.enable_planning_flag:
             self.enable_planning_flag = False
             self.outer_bound = outer_bound
@@ -141,7 +131,6 @@ class CurveGenerator:
             
             inner_finish_mergin_point = inner_finish_point + self.inner_finish_mergin * inner_forward_vec
             inner_start_mergin_point = inner_start_point + self.inner_start_mergin * inner_backward_vec
-            road_width = calcDistancePoits(outer_finish_point, inner_finish_point)
             
             curve_start_idx = getNearestPointIndex(inner_start_point, reference_path_array[:, 0:2])
             curve_start_margin_idx = getNearestPointIndex(inner_start_mergin_point , reference_path_array[:, 0:2])
@@ -158,15 +147,6 @@ class CurveGenerator:
                 ## Turn left
                 current_rad = math.pi
 
-            if road_width > 3.0:
-                R = 4.0
-                self.alpha = 0.7
-            elif road_width > 2.5:
-                R = 4.5
-                self.alpha = 0.6
-            else:
-                R = 3.0
-
             ## Set curve start and end
             self.curve_start_idx = curve_start_margin_idx
             self.curve_end_idx = curve_end_margin_idx
@@ -175,17 +155,17 @@ class CurveGenerator:
             curve_end_point = copy.deepcopy(reference_path_array[self.curve_end_idx, 0:2])
             
             ## Calculate small path
-            d_rad = (math.pi * self.alpha) /(self.curve_end_idx - self.curve_start_idx)
+            d_rad = (math.pi * curve_angle) /(self.curve_end_idx - self.curve_start_idx)
             small_path = copy.deepcopy(reference_path_array)
-            raidus_vec = inner_forward_vec * R
+            raidus_vec = inner_forward_vec * carve_radius
             center_point = curve_start_point[0:2] + raidus_vec
             
             for idx in range(self.curve_start_idx, self.curve_end_idx):
                 rotated_vec = np.array([raidus_vec[0] * np.cos(current_rad) - raidus_vec[1] * np.sin(current_rad),
                                     raidus_vec[0] * np.sin(current_rad) + raidus_vec[1] * np.cos(current_rad)])
                 rotated_vec /= np.hypot(rotated_vec[0],rotated_vec[1])
-                small_path[idx][0] = center_point[0] + rotated_vec[0] * R
-                small_path[idx][1] = center_point[1] + rotated_vec[1] * R
+                small_path[idx][0] = center_point[0] + rotated_vec[0] * carve_radius
+                small_path[idx][1] = center_point[1] + rotated_vec[1] * carve_radius
                 current_rad +=  d_rad * curve_sign
 
             #
@@ -274,26 +254,3 @@ class CurveGenerator:
             if dt < min_path_length:
                 del reference_path_array[idx]
         return reference_path_array
-    
-    def _get_sharp_point(self, bound):
-        sharp_index = None
-        if len(bound) < 3:
-            return sharp_index
-
-        for idx in range(2, len(bound)):
-            cos= getCosFromLines(bound[idx - 2], bound[idx - 1], bound[idx])
-            if (cos < 0.2 and cos > -0.2):
-                sharp_index = idx -1
-                break
-        return sharp_index
-
-    def _get_diag_point(self, bound):
-        diag_idx = None
-        if len(bound) < 3:
-            return diag_idx
-        for idx in range(2, len(bound)):
-            cos= getCosFromLines(bound[idx - 2], bound[idx - 1], bound[idx])
-            if (cos < 0.85 and cos > 0.4) or (cos < -0.4 and cos > -0.85):
-                diag_idx = idx -1 
-                break
-        return diag_idx
