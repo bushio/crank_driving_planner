@@ -20,7 +20,6 @@ class CurveGenerator:
 
         self.enable_planning_flag = True
         self.inner_finish_mergin = 5.0
-        self.inner_start_mergin = 2.0
         self.margin_idx = 10
 
 
@@ -100,7 +99,7 @@ class CurveGenerator:
     
     def generate_curve_circle(self, reference_path, reference_path_array : np.array, outer_bound : np.array, inner_bound : np.array, 
                               diag_idx: int, sharp_index: int, road_width :float,  curve_sign:int,
-                              carve_radius: float = 3.0, curve_angle :float =0.6):
+                              carve_radius: float = 3.0, curve_angle :float =0.6, inner_start_mergin:float =2.0):
 
         if  self.enable_planning_flag:
             self.enable_planning_flag = False
@@ -130,7 +129,7 @@ class CurveGenerator:
                                             outer_forward_vec)
             
             inner_finish_mergin_point = inner_finish_point + self.inner_finish_mergin * inner_forward_vec
-            inner_start_mergin_point = inner_start_point + self.inner_start_mergin * inner_backward_vec
+            inner_start_mergin_point = inner_start_point + inner_start_mergin * inner_backward_vec
             
             curve_start_idx = getNearestPointIndex(inner_start_point, reference_path_array[:, 0:2])
             curve_start_margin_idx = getNearestPointIndex(inner_start_mergin_point , reference_path_array[:, 0:2])
@@ -190,6 +189,7 @@ class CurveGenerator:
             self.debug_point = np.array([
                                          center_point,
                                          curve_start_point,
+                                         outer_sharp_point 
                                          #inner_finish_point,
                                          #outer_finish_point,
                                          #inner_start_mergin_point,
