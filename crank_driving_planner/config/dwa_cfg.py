@@ -1,6 +1,6 @@
 import math
 
-class Config:
+class DWA_Config:
     """
     simulation parameter class
     """

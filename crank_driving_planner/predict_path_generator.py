@@ -1,7 +1,7 @@
 
 import numpy as np
 from .util import *
-from .config import Config
+from .config import DWA_Config
 from .predictor import DynamicWindowApproach
 
 class PathPredictor:
@@ -9,7 +9,7 @@ class PathPredictor:
         self.logger = logger
         self.get_clock = clock
 
-        self.dwa_config = Config()
+        self.dwa_config = DWA_Config()
         self.predictor = DynamicWindowApproach(self.dwa_config)
         
         self.min_point_dist = 2.0
