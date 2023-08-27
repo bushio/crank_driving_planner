@@ -9,6 +9,7 @@ from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
 
 from .util import *
+from .bound_checker import *
 from .predicted_objects_info import PredictedObjectsInfo
 
 ## For plot
@@ -125,33 +126,6 @@ class CrankDrigingPlanner(Node):
     def onPerception(self, msg: PredictedObjects):
         self.dynamic_objects = msg
 
-    ## 
-    def _get_nearest_path_idx(self, ego_pose, left_bound, right_bound):
-        left_diff = calcDistancePoitsFromArray(ego_pose, left_bound)
-        right_diff = calcDistancePoitsFromArray(ego_pose, right_bound)
-        self.current_left_path_index = left_diff.argmin()
-        self.current_right_path_index = right_diff.argmin()
-        self.current_path_index = min(self.current_left_path_index,
-                                            self.current_right_path_index)
-        
-        self.next_left_path_index = None
-        self.next_right_path_index = None
-        for idx in range(len(left_diff)):
-            if left_diff[idx] > self.next_path_threshold:
-                self.next_left_path_index = idx
-                break
-
-        for idx in range(len(right_diff)):
-            if right_diff[idx] > self.next_path_threshold:
-                self.next_right_path_index = idx
-                break
-
-        if self.next_left_path_index is None or self.next_left_path_index == 0:
-            self.next_left_path_index = self.current_left_path_index + 1
-
-        if self.next_right_path_index is None or self.next_right_path_index == 0:
-            self.next_right_path_index = self.current_right_path_index + 1
-
     ## Callback function for path subscriber ##
     def onTrigger(self, msg: Path):
         self.reference_path = msg
@@ -208,8 +182,11 @@ class CrankDrigingPlanner(Node):
 
         ## Initialize current path index
         ego_pose_array = ConvertPoint2List(self.ego_pose)
-        self._get_nearest_path_idx(ego_pose_array, self.left_bound, self.right_bound)
+        self.current_left_path_index ,self.next_left_path_index = \
+            get_nearest_path_idx(ego_pose_array, self.left_bound, next_path_threshold=5.0)
 
+        self.current_right_path_index ,self.next_right_path_index = \
+            get_nearest_path_idx(ego_pose_array, self.right_bound, next_path_threshold=5.0)
 
         reference_path_array = ConvertPath2Array(self.reference_path)
         ## Visualize objects, vehicle and path on matplotlib
