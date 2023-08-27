@@ -75,7 +75,7 @@ class CrankDrigingPlanner(Node):
         self.stop_time = 0.0
         self.stop_duration = 60
 
-        self.animation_flag = True
+        self.animation_flag = self.curve_cfg.animation_flag
         self.debug = False
         
         if self.animation_flag:
@@ -91,7 +91,7 @@ class CrankDrigingPlanner(Node):
         
         self.max_traj_dist = 15.0
         self.next_path_threshold = 10.0
-        self.arrival_threthold = 1.5
+        self.arrival_threthold = self.curve_cfg.arrival_threthold
 
         self.use_dwa = False
         if self.use_dwa:
@@ -348,21 +348,25 @@ class CrankDrigingPlanner(Node):
             curve_angle = self.curve_cfg.circle_angle_rate[0]
             predict_curve = self.curve_cfg.exec_predict[0]
             inner_start_mergin = self.curve_cfg.inner_start_mergin[0]
+            inner_finish_mergin = self.curve_cfg.inner_finish_mergin[0]
         elif road_width >= 2.5 and road_width < 3.2:
             R = self.curve_cfg.circle_radius[1]
             curve_angle = self.curve_cfg.circle_angle_rate[1]
             predict_curve = self.curve_cfg.exec_predict[1]
             inner_start_mergin = self.curve_cfg.inner_start_mergin[1]
+            inner_finish_mergin = self.curve_cfg.inner_finish_mergin[1]
         elif road_width > 2.0  and road_width < 2.5:
             R = self.curve_cfg.circle_radius[2]
             curve_angle = self.curve_cfg.circle_angle_rate[2]
             predict_curve = self.curve_cfg.exec_predict[2]
             inner_start_mergin = self.curve_cfg.inner_start_mergin[2]
+            inner_finish_mergin = self.curve_cfg.inner_finish_mergin[2]
         else:
             R = self.curve_cfg.circle_radius[3]
             curve_angle = self.curve_cfg.circle_angle_rate[3]
             predict_curve = self.curve_cfg.exec_predict[3]
             inner_start_mergin = self.curve_cfg.inner_start_mergin[3]
+            inner_finish_mergin = self.curve_cfg.inner_finish_mergin[3]
         
         dist_to_sharp_point = calcDistancePoits(ego_pose_array[0:2], outer_bound[sharp_index])
         
@@ -384,7 +388,8 @@ class CrankDrigingPlanner(Node):
                 curve_sign,
                 carve_radius = R,
                 curve_angle = curve_angle,
-                inner_start_mergin=inner_start_mergin
+                inner_start_mergin=inner_start_mergin,
+                inner_finish_mergin=inner_finish_mergin
                 )
         else:
             result = None
