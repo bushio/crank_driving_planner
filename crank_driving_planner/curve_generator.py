@@ -24,7 +24,7 @@ class CurveGenerator:
         self.margin_idx = 10
 
 
-    def generate_curve_inner(self, new_path, reference_path_array, target_bound, path_index, curve_sign):
+    def generate_curve_sign_revision(self, new_path, reference_path_array, target_bound, path_index, curve_sign):
         forward_vec = target_bound[path_index + 1] - target_bound[path_index]
         forward_vec_length = np.hypot(forward_vec[0], forward_vec[1])
         forward_vec_norm = forward_vec / forward_vec_length 
