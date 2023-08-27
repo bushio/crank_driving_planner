@@ -32,7 +32,7 @@ def convertPathToTrajectoryPoints(path: Path,
     start_idx = max(start_idx, 0)
     end_idx = min(end_idx, len(path.points) - 1)
     tps = []
-    for idx in reversed(start_idx, end_idx):
+    for idx in reversed(range(start_idx, end_idx)):
         p = path.points[idx]
         tp = TrajectoryPoint()
         tp.pose = p.pose
