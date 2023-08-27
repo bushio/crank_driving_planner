@@ -330,14 +330,7 @@ class CrankDrigingPlanner(Node):
         else:
             self.get_logger().error("[S-crank]: This optimizer can'nt be used for {}".format(self.vehicle_state))
         
-        #new_path = self.curve_generator.generate_curve_inner(
-        #    new_path, 
-        #    reference_path_array, 
-        #    outer_bound, 
-        #    outer_bound_index + 1, 
-        #    curve_sign)
-
-        result = self.curve_generator.generate_curve_inner2(
+        result = self.curve_generator.generate_curve_circle(
             new_path, 
             reference_path_array, 
             outer_bound,

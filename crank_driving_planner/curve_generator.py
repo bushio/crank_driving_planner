@@ -101,7 +101,7 @@ class CurveGenerator:
 
 
 
-    def generate_curve_inner2(self, reference_path, reference_path_array : np.array, outer_bound : np.array, outer_bound_index: int,
+    def generate_curve_circle(self, reference_path, reference_path_array : np.array, outer_bound : np.array, outer_bound_index: int,
                               inner_bound : np.array, inner_bound_index: int, curve_sign: int):
         
         ## Get the diag line of inner bound.
@@ -162,8 +162,8 @@ class CurveGenerator:
                 R = 4.0
                 self.alpha = 0.7
             elif road_width > 2.5:
-                 R = 4.5
-                 self.alpha = 0.6
+                R = 4.5
+                self.alpha = 0.6
             else:
                 R = 3.0
 
