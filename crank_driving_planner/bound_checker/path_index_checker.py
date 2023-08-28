@@ -1,6 +1,9 @@
 import numpy as np
 import sys
-from ..util import *
+import os
+sys.path.append(os.path.dirname(__file__) + "/../")
+from util import *
+
 
 def get_nearest_path_idx(ego_pose, bound, next_path_threshold=5.0):
     diff = calcDistancePoitsFromArray(ego_pose, bound)

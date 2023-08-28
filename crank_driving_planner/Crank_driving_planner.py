@@ -144,13 +144,17 @@ class CrankDrigingPlanner(Node):
 
 
         ## Set vehicle status
-        if self.vehicle_state == "drive" or self.vehicle_state == "initial":
+        if self.vehicle_state == "drive":
             if self.crrent_vel_x > 0:
                 self.vehicle_state = "drive"
                 self.stop_time = 0.0
             else:
                 self.stop_time += 0.5
                 self.get_logger().info("Stop time {}".format(self.stop_time))
+        elif self.vehicle_state == "initial":
+            if self.crrent_vel_x > 0:
+                self.vehicle_state = "drive"
+                self.stop_time = 0.0
         else:
             if self.crrent_vel_x > 0:
                 self.stop_time = 0.0
@@ -249,7 +253,7 @@ class CrankDrigingPlanner(Node):
                 self.get_logger().info("Right bound cos current {} next {}".format(cos_right, cos_right_next))
 
                 #if self.vehicle_state == "drive":
-                if self.vehicle_state == "initial" or self.vehicle_state == "drive":
+                if self.vehicle_state == "drive":
                     if(cos_left_next < 0.2 and  cos_left_next> -0.2) or (cos_left < 0.2 and  cos_left > -0.2):
                         self.vehicle_state = "S-crank-right"
 
