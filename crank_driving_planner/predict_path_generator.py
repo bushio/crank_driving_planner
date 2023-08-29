@@ -1,8 +1,8 @@
 
 import numpy as np
-from .util import *
-from .config import DWA_Config
-from .predictor import DynamicWindowApproach
+from util import *
+from config import DWA_Config
+from predictor import DynamicWindowApproach
 
 class PathPredictor:
     def __init__(self, logger, clock):

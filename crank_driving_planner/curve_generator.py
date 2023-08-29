@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-from .util import *
+from util import *
 from autoware_auto_planning_msgs.msg import Path, PathPoint
 
 class CurveGenerator:

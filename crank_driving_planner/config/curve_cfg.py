@@ -8,7 +8,7 @@ class CurveConfig:
         self.inner_start_mergin = [2.0, 2.0, 1.5, 3.5] #[m]
         self.inner_finish_mergin = [5.0, 5.0, 1.0, 1.0] #[m]
 
-        self.exec_predict = [True, True, True, True]
+        self.exec_predict = [False, False, False, True]
 
         self.sharp_dist_threshold = 15 #[m]
         self.animation_flag = False

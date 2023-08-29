@@ -8,16 +8,17 @@ from autoware_auto_perception_msgs.msg import PredictedObjects
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from nav_msgs.msg import Odometry
 
-from .util import *
-from .bound_checker import *
-from .predicted_objects_info import PredictedObjectsInfo
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
 
-## For plot
-from .debug_plot import PlotMarker
+from util import *
+from bound_checker import *
+from predicted_objects_info import PredictedObjectsInfo
 
-from .curve_generator import CurveGenerator
-from .predict_path_generator import PathPredictor
-from .config import CurveConfig
+from curve_generator import CurveGenerator
+from predict_path_generator import PathPredictor
+from config import CurveConfig
 
 NANO_SECONDS = (1 / 1000)**3
 
@@ -35,9 +36,6 @@ class CrankDrigingPlanner(Node):
         ## Vehicle odometry subscriber ##
         self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 10)
 
-        ## Vehicle odometry subscriber ##
-        self.create_subscription(Odometry, "~/input/odometry", self.onOdometry, 10)
-
         # Predicted objects subscriber
         self.create_subscription(PredictedObjects, "~/input/perception", self.onPerception, 10)
 
@@ -45,6 +43,7 @@ class CrankDrigingPlanner(Node):
         self.pub_path_ = self.create_publisher(Path, 
                                                "~/output/path", 
                                                 10)
+        
         # trajectory publisher. Remap "/planning/scenario_planning/lane_driving/trajectory" ##
         self.pub_traj_ = self.create_publisher(Trajectory, "~/output/trajectory", 10)
 
@@ -79,6 +78,8 @@ class CrankDrigingPlanner(Node):
         self.debug = False
         
         if self.animation_flag:
+            ## For plot
+            from debug_plot import PlotMarker
             self.plot_marker = PlotMarker()
             self.curve_plot = None
             self.curve_backward_point = None
