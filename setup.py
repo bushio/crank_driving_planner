@@ -2,11 +2,15 @@ from setuptools import setup
 import os
 import glob
 package_name = 'crank_driving_planner'
-
+submodules = [
+    'crank_driving_planner/bound_checker',
+    'crank_driving_planner/config',
+    'crank_driving_planner/predictor',
+    'crank_driving_planner/util']
 setup(
     name=package_name,
     version='0.0.0',
-    packages=[package_name],
+    packages=[package_name] + submodules,
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
