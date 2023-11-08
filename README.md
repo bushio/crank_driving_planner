@@ -7,11 +7,11 @@ A planner for Autoware that runs on an S-shaped crank.
 cd aichallenge_ws/src/aichallenge_submit/
 git clone git@github.com:bushio/crank_driving_planner.git
 ```
-2. motion_planning.launch.py の置き換え
+2. aichallenge_submit.launch.xml の置き換え
 ```
 cp ~/aichallenge2023-sim/docker/aichallenge/aichallenge_ws/src/aichallenge_submit/crank_driving_planner/launch/aichallenge_submit.launch.xml ~/aichallenge2023-sim/docker/aichallenge/aichallenge_ws/src/aichallenge_submit/aichallenge_submit_launch/launch/
 ```
-3. aichallenge_submit.launch.xml の置き換え
+3. motion_planning.launch.py の置き換え
 ```
 cp ~/aichallenge2023-sim/docker/aichallenge/aichallenge_ws/src/aichallenge_submit/crank_driving_planner/launch/motion_planning.launch.py ~/aichallenge2023-sim/docker/aichallenge/aichallenge_ws/src/aichallenge_submit/autoware_universe_launch/tier4_planning_launch/launch/scenario_planning/lane_driving/motion_planning/
 ```
