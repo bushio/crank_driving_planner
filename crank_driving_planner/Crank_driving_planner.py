@@ -127,7 +127,7 @@ class CrankDrivingPlanner(Node):
     ## Callback function for accrel subscriber ##
     def onAcceleration(self, msg: AccelWithCovarianceStamped):
         # return geometry_msgs/Accel 
-        self.current_accel = accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
+        self.current_accel = [msg.accel.accel.linear.x, msg.accel.accel.linear.y, msg.accel.accel.linear.z]
 
     ## Callback function for predicted objects ##
     def onPerception(self, msg: PredictedObjects):
