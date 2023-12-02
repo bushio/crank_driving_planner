@@ -22,7 +22,7 @@ from config import CurveConfig
 
 NANO_SECONDS = (1 / 1000)**3
 
-class CrankDrigingPlanner(Node):
+class CrankDrivingPlanner(Node):
     def __init__(self):
         super().__init__('CrankDrigingPlanner')
         self.get_logger().info("Start CrankDrigingPlanner")
